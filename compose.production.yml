@@ -1,0 +1,90 @@
+name: knowledge-jumarag-service
+
+x-runtime: &runtime
+  image: ${JUMARAG_IMAGE:?Set JUMARAG_IMAGE to an immutable image reference}
+  environment: &runtime-environment
+    DATABASE_URL: jdbc:postgresql://postgres:5432/${POSTGRES_DB:?Set POSTGRES_DB}
+    DATABASE_USER: ${POSTGRES_USER:?Set POSTGRES_USER}
+    DATABASE_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD}
+    APP_EMBEDDING_PROVIDER: fake
+    APP_MIGRATIONS_ENABLED: "false"
+  networks:
+    - application
+  restart: unless-stopped
+
+services:
+  postgres:
+    image: pgvector/pgvector:0.8.6-pg17-bookworm
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:?Set POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER:?Set POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+    networks:
+      - application
+    restart: unless-stopped
+
+  migrate:
+    <<: *runtime
+    environment:
+      <<: *runtime-environment
+      APP_RUNTIME: migrate
+      APP_MIGRATIONS_ENABLED: "true"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: "no"
+
+  api:
+    <<: *runtime
+    environment:
+      <<: *runtime-environment
+      APP_RUNTIME: api
+      SERVER_PORT: "8080"
+    expose:
+      - "8080"
+    networks:
+      - application
+      - edge
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://127.0.0.1:8080/actuator/health/readiness"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+      start_period: 10s
+
+  worker:
+    <<: *runtime
+    environment:
+      <<: *runtime-environment
+      APP_RUNTIME: worker
+      SERVER_PORT: "8081"
+      SPRINGDOC_API_DOCS_ENABLED: "false"
+      SPRINGDOC_SWAGGER_UI_ENABLED: "false"
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://127.0.0.1:8081/actuator/health/readiness"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+      start_period: 10s
+
+volumes:
+  postgres_data:
+
+networks:
+  application:
+    internal: true
+  edge:
+    internal: true

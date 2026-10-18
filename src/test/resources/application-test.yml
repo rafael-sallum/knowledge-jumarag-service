@@ -1,0 +1,11 @@
+spring:
+  flyway:
+    enabled: true
+  main:
+    banner-mode: off
+
+app:
+  runtime: api
+  embedding:
+    provider: fake
+    dimensions: 1536

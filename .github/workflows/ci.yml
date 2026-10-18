@@ -1,0 +1,31 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+          cache: maven
+      - name: Verify with unit and pgvector Testcontainers tests
+        run: ./mvnw --batch-mode verify
+      - name: Validate Compose models
+        run: |
+          docker compose --env-file .env.example -f compose.yml config --quiet
+          JUMARAG_IMAGE=knowledge-jumarag-service:${GITHUB_SHA} \
+          POSTGRES_DB=jumarag POSTGRES_USER=jumarag POSTGRES_PASSWORD=ci-only \
+          docker compose -f compose.production.yml config --quiet
+      - name: Build production image
+        run: docker build --tag "knowledge-jumarag-service:${GITHUB_SHA}" .
