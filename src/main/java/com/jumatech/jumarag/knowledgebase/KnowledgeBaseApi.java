@@ -1,6 +1,8 @@
 package com.jumatech.jumarag.knowledgebase;
 
+import com.jumatech.jumarag.security.OpenApiConfiguration;
 import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Size;
@@ -16,7 +18,8 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 @RestController
-@RequestMapping("/v1/knowledge-bases")
+@RequestMapping("/v1/admin/knowledge-bases")
+@SecurityRequirement(name = OpenApiConfiguration.ADMIN_SCHEME)
 @ConditionalOnProperty(name = "app.runtime", havingValue = "api", matchIfMissing = true)
 public final class KnowledgeBaseApi {
     private final KnowledgeBaseService service;
@@ -26,11 +29,11 @@ public final class KnowledgeBaseApi {
     }
 
     @PostMapping
-    @Operation(summary = "Create a Phase-0 knowledge base", description = "Internal proof API; authentication is required before production exposure.")
+    @Operation(summary = "Create a knowledge base")
     ResponseEntity<KnowledgeBase> create(@Valid @RequestBody CreateKnowledgeBase request) {
         KnowledgeBase created = service.create(
                 request.slug(), request.name(), request.description(), request.defaultLocale());
-        return ResponseEntity.created(URI.create("/v1/knowledge-bases/" + created.id())).body(created);
+        return ResponseEntity.created(URI.create("/v1/admin/knowledge-bases/" + created.id())).body(created);
     }
 
     @GetMapping

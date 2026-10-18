@@ -20,7 +20,10 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.web.client.TestRestTemplate;
 import org.springframework.boot.testcontainers.service.connection.ServiceConnection;
 import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.http.HttpEntity;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.test.annotation.DirtiesContext;
@@ -118,6 +121,11 @@ class PhaseZeroIntegrationTest {
         embeddings.embed(english.id());
         embeddings.embed(isolated.id());
 
+        jdbc.sql("UPDATE source_version SET status = 'READY' WHERE id IN (:version, :otherVersion)")
+                .param("version", version.id())
+                .param("otherVersion", otherVersion.id())
+                .update();
+
         assertThat(embeddingRepository.exists(freeBall.id(), EmbeddingRepository.PHASE_ZERO_PROFILE_ID)).isTrue();
         var hits = retrieval.search(base.id(), "regra da bola livre snooker", "pt-BR", null, 10);
 
@@ -161,18 +169,21 @@ class PhaseZeroIntegrationTest {
         assertThat(http.getForEntity("/actuator/health/readiness", String.class).getBody())
                 .contains("\"status\":\"UP\"");
         assertThat(http.getForEntity("/v3/api-docs", String.class).getBody())
-                .contains("/v1/knowledge-bases/{knowledgeBaseId}/retrieval/search");
+                .contains("/v1/knowledge-bases/{slug}/retrieval/search")
+                .contains("AdminBearer")
+                .contains("ClientApiKey");
     }
 
     @Test
     void returnsCorrelatedValidationErrorsWithoutStackTraces() {
+        HttpHeaders headers = adminHeaders();
         ResponseEntity<String> response = http.postForEntity(
-                "/v1/knowledge-bases",
-                Map.of(
+                "/v1/admin/knowledge-bases",
+                new HttpEntity<>(Map.of(
                         "slug", "Not Valid",
                         "name", "",
                         "description", "",
-                        "defaultLocale", "invalid_locale"),
+                        "defaultLocale", "invalid_locale"), headers),
                 String.class);
 
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
@@ -185,11 +196,22 @@ class PhaseZeroIntegrationTest {
 
     @Test
     void returnsNotFoundForUnknownResourcesInsteadOfMaskingThemAsServerErrors() {
-        ResponseEntity<String> response = http.getForEntity("/v1/not-a-resource", String.class);
+        ResponseEntity<String> response = http.exchange(
+                "/v1/admin/not-a-resource",
+                org.springframework.http.HttpMethod.GET,
+                new HttpEntity<>(adminHeaders()),
+                String.class);
 
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.NOT_FOUND);
         assertThat(response.getBody())
                 .contains("\"code\":\"RESOURCE_NOT_FOUND\"")
                 .doesNotContain("stackTrace");
+    }
+
+    private static HttpHeaders adminHeaders() {
+        HttpHeaders headers = new HttpHeaders();
+        headers.setBearerAuth("test-admin-token-with-at-least-thirty-two-characters");
+        headers.setContentType(MediaType.APPLICATION_JSON);
+        return headers;
     }
 }

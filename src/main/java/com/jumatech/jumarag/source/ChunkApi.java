@@ -1,6 +1,8 @@
 package com.jumatech.jumarag.source;
 
 import com.fasterxml.jackson.databind.JsonNode;
+import com.jumatech.jumarag.security.OpenApiConfiguration;
+import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Positive;
@@ -17,7 +19,8 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 @RestController
-@RequestMapping("/v1/source-versions")
+@RequestMapping("/v1/admin/source-versions")
+@SecurityRequirement(name = OpenApiConfiguration.ADMIN_SCHEME)
 @ConditionalOnProperty(name = "app.runtime", havingValue = "api", matchIfMissing = true)
 public final class ChunkApi {
     private final ChunkService service;
@@ -39,7 +42,7 @@ public final class ChunkApi {
                 request.pageStart(),
                 request.pageEnd(),
                 request.metadata());
-        return ResponseEntity.created(URI.create("/v1/chunks/" + created.id())).body(created);
+        return ResponseEntity.created(URI.create("/v1/admin/chunks/" + created.id())).body(created);
     }
 
     public record CreateChunk(

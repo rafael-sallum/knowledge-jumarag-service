@@ -2,6 +2,7 @@ package com.jumatech.jumarag.embedding;
 
 import java.time.OffsetDateTime;
 import java.util.UUID;
+import java.util.Optional;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Repository;
 
@@ -43,6 +44,22 @@ public class EmbeddingRepository {
                 .single();
     }
 
+    public Optional<EmbeddingProfile> findProfileByName(String name) {
+        return jdbc.sql("""
+                        SELECT id, name, provider, model, dimensions, distance_metric
+                        FROM embedding_profile WHERE name = :name
+                        """)
+                .param("name", name)
+                .query((row, number) -> new EmbeddingProfile(
+                        row.getObject("id", UUID.class),
+                        row.getString("name"),
+                        row.getString("provider"),
+                        row.getString("model"),
+                        row.getInt("dimensions"),
+                        row.getString("distance_metric")))
+                .optional();
+    }
+
     public static String vectorLiteral(float[] vector) {
         validate(vector);
         StringBuilder literal = new StringBuilder(PHASE_ZERO_DIMENSIONS * 10).append('[');
@@ -65,4 +82,7 @@ public class EmbeddingRepository {
             }
         }
     }
+
+    public record EmbeddingProfile(
+            UUID id, String name, String provider, String model, int dimensions, String distanceMetric) {}
 }

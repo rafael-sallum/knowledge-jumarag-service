@@ -6,6 +6,15 @@ spring:
 
 app:
   runtime: api
+  security:
+    admin-token: test-admin-token-with-at-least-thirty-two-characters
+    api-key-pepper: test-api-key-pepper-with-at-least-thirty-two-characters
+  ingestion:
+    max-upload-bytes: 4096
+    target-words: 20
+    max-words: 30
+    overlap-words: 5
+    default-embedding-profile: phase0-fake-1536
   embedding:
     provider: fake
     dimensions: 1536

@@ -3,8 +3,9 @@ package com.jumatech.jumarag.retrieval;
 import com.jumatech.jumarag.embedding.EmbeddingGateway;
 import com.jumatech.jumarag.embedding.EmbeddingRepository;
 import com.jumatech.jumarag.knowledgebase.KnowledgeBaseService;
-import com.jumatech.jumarag.source.SourceService;
+import com.jumatech.jumarag.security.ApiClientService;
 import com.jumatech.jumarag.shared.web.DomainException;
+import com.jumatech.jumarag.source.SourceService;
 import io.micrometer.core.instrument.MeterRegistry;
 import java.util.List;
 import java.util.Locale;
@@ -18,6 +19,7 @@ public final class RetrievalService {
     private final EmbeddingGateway embeddings;
     private final KnowledgeBaseService knowledgeBases;
     private final SourceService sources;
+    private final ApiClientService clients;
     private final MeterRegistry meterRegistry;
 
     public RetrievalService(
@@ -25,12 +27,21 @@ public final class RetrievalService {
             EmbeddingGateway embeddings,
             KnowledgeBaseService knowledgeBases,
             SourceService sources,
+            ApiClientService clients,
             MeterRegistry meterRegistry) {
         this.repository = repository;
         this.embeddings = embeddings;
         this.knowledgeBases = knowledgeBases;
         this.sources = sources;
+        this.clients = clients;
         this.meterRegistry = meterRegistry;
+    }
+
+    public List<RetrievalHit> searchAuthorized(
+            UUID clientId, String knowledgeBaseSlug, String query, String language, UUID sourceId, int limit) {
+        var knowledgeBase = knowledgeBases.requireBySlug(knowledgeBaseSlug);
+        clients.requireRetrieveGrant(clientId, knowledgeBase.id());
+        return search(knowledgeBase.id(), query, language, sourceId, limit);
     }
 
     public List<RetrievalHit> search(

@@ -83,7 +83,7 @@ public final class SourceService {
                 byteSize,
                 effectiveFrom,
                 effectiveTo,
-                SourceVersion.Status.READY,
+                SourceVersion.Status.REGISTERED,
                 OffsetDateTime.now(clock));
         try {
             return repository.insertVersion(version);

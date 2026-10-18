@@ -18,6 +18,7 @@ public record SourceVersion(
 
     public enum Status {
         REGISTERED,
+        PROCESSING,
         READY,
         FAILED,
         DISABLED

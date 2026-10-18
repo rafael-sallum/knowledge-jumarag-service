@@ -26,6 +26,8 @@ jobs:
           docker compose --env-file .env.example -f compose.yml config --quiet
           JUMARAG_IMAGE=knowledge-jumarag-service:${GITHUB_SHA} \
           POSTGRES_DB=jumarag POSTGRES_USER=jumarag POSTGRES_PASSWORD=ci-only \
+          JUMARAG_ADMIN_TOKEN=ci-admin-token-with-at-least-32-characters \
+          JUMARAG_API_KEY_PEPPER=ci-api-key-pepper-with-at-least-32-characters \
           docker compose -f compose.production.yml config --quiet
       - name: Build production image
         run: docker build --tag "knowledge-jumarag-service:${GITHUB_SHA}" .

@@ -1,5 +1,7 @@
 package com.jumatech.jumarag.source;
 
+import com.jumatech.jumarag.security.OpenApiConfiguration;
+import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
@@ -19,7 +21,8 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 @RestController
-@RequestMapping("/v1")
+@RequestMapping("/v1/admin")
+@SecurityRequirement(name = OpenApiConfiguration.ADMIN_SCHEME)
 @ConditionalOnProperty(name = "app.runtime", havingValue = "api", matchIfMissing = true)
 public final class SourceApi {
     private final SourceService service;
@@ -34,7 +37,7 @@ public final class SourceApi {
             @Valid @RequestBody CreateSource request) {
         KnowledgeSource created = service.create(
                 knowledgeBaseId, request.sourceType(), request.logicalName(), request.canonicalUri());
-        return ResponseEntity.created(URI.create("/v1/sources/" + created.id())).body(created);
+        return ResponseEntity.created(URI.create("/v1/admin/sources/" + created.id())).body(created);
     }
 
     @GetMapping("/knowledge-bases/{knowledgeBaseId}/sources")
@@ -54,7 +57,7 @@ public final class SourceApi {
                 request.byteSize(),
                 request.effectiveFrom(),
                 request.effectiveTo());
-        return ResponseEntity.created(URI.create("/v1/source-versions/" + created.id())).body(created);
+        return ResponseEntity.created(URI.create("/v1/admin/source-versions/" + created.id())).body(created);
     }
 
     public record CreateSource(

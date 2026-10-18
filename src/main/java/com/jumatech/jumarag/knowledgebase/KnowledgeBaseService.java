@@ -65,6 +65,10 @@ public final class KnowledgeBaseService {
         return repository.findById(id).orElseThrow(this::notFound);
     }
 
+    public KnowledgeBase requireBySlug(String slug) {
+        return repository.findBySlug(slug).orElseThrow(this::notFound);
+    }
+
     static void validateSlug(String slug) {
         if (slug == null || !SLUG.matcher(slug).matches()) {
             throw new DomainException(

@@ -1,6 +1,10 @@
 spring:
   application:
     name: knowledge-jumarag-service
+  servlet:
+    multipart:
+      max-file-size: ${JUMARAG_MAX_UPLOAD_SIZE:1MB}
+      max-request-size: ${JUMARAG_MAX_UPLOAD_SIZE:1MB}
   datasource:
     url: ${DATABASE_URL:jdbc:postgresql://localhost:55433/jumarag}
     username: ${DATABASE_USER:jumarag}
@@ -15,6 +19,15 @@ spring:
 
 app:
   runtime: ${APP_RUNTIME:api}
+  security:
+    admin-token: ${JUMARAG_ADMIN_TOKEN}
+    api-key-pepper: ${JUMARAG_API_KEY_PEPPER}
+  ingestion:
+    max-upload-bytes: ${JUMARAG_MAX_UPLOAD_BYTES:1048576}
+    target-words: ${JUMARAG_CHUNK_TARGET_WORDS:650}
+    max-words: ${JUMARAG_CHUNK_MAX_WORDS:900}
+    overlap-words: ${JUMARAG_CHUNK_OVERLAP_WORDS:100}
+    default-embedding-profile: ${JUMARAG_DEFAULT_EMBEDDING_PROFILE:phase0-fake-1536}
   embedding:
     provider: ${APP_EMBEDDING_PROVIDER:fake}
     dimensions: 1536

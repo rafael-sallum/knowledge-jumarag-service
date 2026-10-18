@@ -1,5 +1,7 @@
 package com.jumatech.jumarag.operations;
 
+import com.jumatech.jumarag.ingestion.IngestionProperties;
+import com.jumatech.jumarag.security.SecurityProperties;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.boot.ApplicationRunner;
@@ -9,7 +11,11 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
 @Configuration
-@EnableConfigurationProperties(RuntimeConfiguration.RuntimeProperties.class)
+@EnableConfigurationProperties({
+    RuntimeConfiguration.RuntimeProperties.class,
+    SecurityProperties.class,
+    IngestionProperties.class
+})
 public class RuntimeConfiguration {
     private static final Logger log = LoggerFactory.getLogger(RuntimeConfiguration.class);
 
