@@ -10,6 +10,7 @@ public record KnowledgeBaseGrant(
         OffsetDateTime createdAt) {
 
     public enum Permission {
-        RETRIEVE
+        RETRIEVE,
+        ASK
     }
 }

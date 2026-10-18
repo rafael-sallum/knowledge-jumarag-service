@@ -38,22 +38,32 @@ public final class RetrievalApi {
         @ApiResponse(responseCode = "200", description = "Ranked evidence chunks"),
         @ApiResponse(responseCode = "401", description = "Missing, invalid, or disabled client key"),
         @ApiResponse(responseCode = "403", description = "Client lacks a RETRIEVE grant"),
-        @ApiResponse(responseCode = "404", description = "Knowledge base was not found")
+        @ApiResponse(responseCode = "404", description = "Knowledge base or snapshot was not found"),
+        @ApiResponse(responseCode = "409", description = "No active snapshot or requested snapshot is not published")
     })
     SearchResponse search(
             @PathVariable String slug,
             @RequestAttribute(ApiClientService.CLIENT_ID_ATTRIBUTE) UUID clientId,
             @Valid @RequestBody SearchRequest request) {
         int limit = request.limit() == null ? 10 : request.limit();
-        return new SearchResponse(service.searchAuthorized(
-                clientId, slug, request.query(), request.language(), request.sourceId(), limit));
+        var result = service.searchAuthorized(
+                clientId, slug, request.query(), request.language(), request.sourceId(), limit, request.snapshotId());
+        return new SearchResponse(
+                result.knowledgeBaseId(), result.snapshotId(), result.retrievalProfile(),
+                result.embeddingProfile(), result.hits());
     }
 
     public record SearchRequest(
             @NotBlank @Size(max = 4000) String query,
             @Size(max = 35) String language,
             UUID sourceId,
-            @Min(1) @Max(50) Integer limit) {}
+            @Min(1) @Max(50) Integer limit,
+            UUID snapshotId) {}
 
-    public record SearchResponse(List<RetrievalHit> hits) {}
+    public record SearchResponse(
+            UUID knowledgeBaseId,
+            UUID snapshotId,
+            String retrievalProfile,
+            String embeddingProfile,
+            List<RetrievalHit> hits) {}
 }

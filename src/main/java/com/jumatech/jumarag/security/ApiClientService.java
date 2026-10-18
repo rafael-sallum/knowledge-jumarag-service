@@ -93,12 +93,17 @@ public final class ApiClientService {
     }
 
     public KnowledgeBaseGrant grant(UUID clientId, UUID knowledgeBaseId) {
+        return grant(clientId, knowledgeBaseId, KnowledgeBaseGrant.Permission.RETRIEVE);
+    }
+
+    public KnowledgeBaseGrant grant(
+            UUID clientId, UUID knowledgeBaseId, KnowledgeBaseGrant.Permission permission) {
         requireEnabled(clientId);
         knowledgeBases.require(knowledgeBaseId);
         return repository.grant(new KnowledgeBaseGrant(
                 clientId,
                 knowledgeBaseId,
-                KnowledgeBaseGrant.Permission.RETRIEVE,
+                permission,
                 OffsetDateTime.now(clock)));
     }
 
@@ -108,8 +113,13 @@ public final class ApiClientService {
     }
 
     public void removeGrant(UUID clientId, UUID knowledgeBaseId) {
+        removeGrant(clientId, knowledgeBaseId, KnowledgeBaseGrant.Permission.RETRIEVE);
+    }
+
+    public void removeGrant(
+            UUID clientId, UUID knowledgeBaseId, KnowledgeBaseGrant.Permission permission) {
         require(clientId);
-        repository.removeGrant(clientId, knowledgeBaseId, KnowledgeBaseGrant.Permission.RETRIEVE);
+        repository.removeGrant(clientId, knowledgeBaseId, permission);
     }
 
     public Optional<AuthenticatedClient> authenticate(String credential) {
@@ -124,12 +134,21 @@ public final class ApiClientService {
     }
 
     public void requireRetrieveGrant(UUID clientId, UUID knowledgeBaseId) {
+        requireGrant(clientId, knowledgeBaseId, KnowledgeBaseGrant.Permission.RETRIEVE);
+    }
+
+    public void requireAskGrant(UUID clientId, UUID knowledgeBaseId) {
+        requireGrant(clientId, knowledgeBaseId, KnowledgeBaseGrant.Permission.ASK);
+    }
+
+    private void requireGrant(
+            UUID clientId, UUID knowledgeBaseId, KnowledgeBaseGrant.Permission permission) {
         requireEnabled(clientId);
-        if (!repository.hasGrant(clientId, knowledgeBaseId, KnowledgeBaseGrant.Permission.RETRIEVE)) {
+        if (!repository.hasGrant(clientId, knowledgeBaseId, permission)) {
             throw new DomainException(
                     "KNOWLEDGE_BASE_ACCESS_FORBIDDEN",
                     HttpStatus.FORBIDDEN,
-                    "The API client is not granted retrieval access to this knowledge base.");
+                    "The API client lacks the required knowledge-base permission.");
         }
     }
 

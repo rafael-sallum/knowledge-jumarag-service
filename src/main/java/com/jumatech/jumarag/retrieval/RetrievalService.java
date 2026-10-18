@@ -4,6 +4,8 @@ import com.jumatech.jumarag.embedding.EmbeddingGateway;
 import com.jumatech.jumarag.embedding.EmbeddingRepository;
 import com.jumatech.jumarag.knowledgebase.KnowledgeBaseService;
 import com.jumatech.jumarag.security.ApiClientService;
+import com.jumatech.jumarag.snapshot.KnowledgeSnapshot;
+import com.jumatech.jumarag.snapshot.SnapshotService;
 import com.jumatech.jumarag.shared.web.DomainException;
 import com.jumatech.jumarag.source.SourceService;
 import io.micrometer.core.instrument.MeterRegistry;
@@ -20,6 +22,7 @@ public final class RetrievalService {
     private final KnowledgeBaseService knowledgeBases;
     private final SourceService sources;
     private final ApiClientService clients;
+    private final SnapshotService snapshots;
     private final MeterRegistry meterRegistry;
 
     public RetrievalService(
@@ -28,24 +31,37 @@ public final class RetrievalService {
             KnowledgeBaseService knowledgeBases,
             SourceService sources,
             ApiClientService clients,
+            SnapshotService snapshots,
             MeterRegistry meterRegistry) {
         this.repository = repository;
         this.embeddings = embeddings;
         this.knowledgeBases = knowledgeBases;
         this.sources = sources;
         this.clients = clients;
+        this.snapshots = snapshots;
         this.meterRegistry = meterRegistry;
     }
 
-    public List<RetrievalHit> searchAuthorized(
+    public RetrievalResult searchAuthorized(
             UUID clientId, String knowledgeBaseSlug, String query, String language, UUID sourceId, int limit) {
-        var knowledgeBase = knowledgeBases.requireBySlug(knowledgeBaseSlug);
-        clients.requireRetrieveGrant(clientId, knowledgeBase.id());
-        return search(knowledgeBase.id(), query, language, sourceId, limit);
+        return searchAuthorized(clientId, knowledgeBaseSlug, query, language, sourceId, limit, null);
     }
 
-    public List<RetrievalHit> search(
+    public RetrievalResult searchAuthorized(
+            UUID clientId, String knowledgeBaseSlug, String query, String language,
+            UUID sourceId, int limit, UUID snapshotId) {
+        var knowledgeBase = knowledgeBases.requireBySlug(knowledgeBaseSlug);
+        clients.requireRetrieveGrant(clientId, knowledgeBase.id());
+        return search(knowledgeBase.id(), query, language, sourceId, limit, snapshotId);
+    }
+
+    public RetrievalResult search(
             UUID knowledgeBaseId, String query, String language, UUID sourceId, int limit) {
+        return search(knowledgeBaseId, query, language, sourceId, limit, null);
+    }
+
+    public RetrievalResult search(
+            UUID knowledgeBaseId, String query, String language, UUID sourceId, int limit, UUID snapshotId) {
         knowledgeBases.require(knowledgeBaseId);
         if (query == null || query.isBlank()) {
             throw new DomainException("INVALID_RETRIEVAL_QUERY", HttpStatus.BAD_REQUEST, "Query must not be blank.");
@@ -64,15 +80,30 @@ public final class RetrievalService {
                     HttpStatus.BAD_REQUEST,
                     "Source filter does not belong to the selected knowledge base.");
         }
+        KnowledgeSnapshot snapshot = snapshots.resolveForClient(knowledgeBaseId, snapshotId);
         float[] queryVector = embeddings.embed(query);
         String finalLanguage = normalizedLanguage;
-        return meterRegistry.timer("jumarag.retrieval.duration", "provider", embeddings.provider())
+        List<RetrievalHit> hits = meterRegistry.timer("jumarag.retrieval.duration", "provider", embeddings.provider())
                 .record(() -> repository.search(
                         knowledgeBaseId,
+                        snapshot.id(),
                         EmbeddingRepository.PHASE_ZERO_PROFILE_ID,
                         queryVector,
                         finalLanguage,
                         sourceId,
                         limit));
+        return new RetrievalResult(
+                knowledgeBaseId,
+                snapshot.id(),
+                "EXACT_COSINE",
+                "phase0-fake-1536",
+                hits == null ? List.of() : hits);
     }
+
+    public record RetrievalResult(
+            UUID knowledgeBaseId,
+            UUID snapshotId,
+            String retrievalProfile,
+            String embeddingProfile,
+            List<RetrievalHit> hits) {}
 }

@@ -9,6 +9,7 @@ import com.jumatech.jumarag.embedding.EmbeddingService;
 import com.jumatech.jumarag.knowledgebase.KnowledgeBaseRepository;
 import com.jumatech.jumarag.knowledgebase.KnowledgeBaseService;
 import com.jumatech.jumarag.retrieval.RetrievalService;
+import com.jumatech.jumarag.snapshot.SnapshotService;
 import com.jumatech.jumarag.source.ChunkService;
 import com.jumatech.jumarag.source.KnowledgeSource;
 import com.jumatech.jumarag.source.SourceService;
@@ -56,6 +57,7 @@ class PhaseZeroIntegrationTest {
     @Autowired EmbeddingService embeddings;
     @Autowired EmbeddingRepository embeddingRepository;
     @Autowired RetrievalService retrieval;
+    @Autowired SnapshotService snapshots;
     @Autowired JdbcClient jdbc;
     @Autowired ObjectMapper objectMapper;
     @Autowired TestRestTemplate http;
@@ -125,19 +127,22 @@ class PhaseZeroIntegrationTest {
                 .param("version", version.id())
                 .param("otherVersion", otherVersion.id())
                 .update();
+        var snapshot = snapshots.create(
+                base.id(), "Phase zero retrieval", java.util.List.of(version.id()), objectMapper.createObjectNode());
+        snapshots.activate(base.id(), snapshot.id());
 
         assertThat(embeddingRepository.exists(freeBall.id(), EmbeddingRepository.PHASE_ZERO_PROFILE_ID)).isTrue();
         var hits = retrieval.search(base.id(), "regra da bola livre snooker", "pt-BR", null, 10);
 
-        assertThat(hits).isNotEmpty();
-        assertThat(hits.getFirst().chunkId()).isEqualTo(freeBall.id());
-        assertThat(hits).extracting(hit -> hit.chunkId()).doesNotContain(english.id(), isolated.id());
-        assertThat(hits).allMatch(hit -> hit.language().equals("pt-BR"));
+        assertThat(hits.hits()).isNotEmpty();
+        assertThat(hits.hits().getFirst().chunkId()).isEqualTo(freeBall.id());
+        assertThat(hits.hits()).extracting(hit -> hit.chunkId()).doesNotContain(english.id(), isolated.id());
+        assertThat(hits.hits()).allMatch(hit -> hit.language().equals("pt-BR"));
 
         jdbc.sql("UPDATE knowledge_source SET enabled = false WHERE id = :id")
                 .param("id", source.id())
                 .update();
-        assertThat(retrieval.search(base.id(), "bola livre", "pt-BR", null, 10)).isEmpty();
+        assertThat(retrieval.search(base.id(), "bola livre", "pt-BR", null, 10).hits()).isEmpty();
     }
 
     @Test
@@ -170,6 +175,8 @@ class PhaseZeroIntegrationTest {
                 .contains("\"status\":\"UP\"");
         assertThat(http.getForEntity("/v3/api-docs", String.class).getBody())
                 .contains("/v1/knowledge-bases/{slug}/retrieval/search")
+                .contains("/v1/knowledge-bases/{slug}/ask")
+                .contains("/v1/admin/knowledge-bases/{knowledgeBaseId}/snapshots")
                 .contains("AdminBearer")
                 .contains("ClientApiKey");
     }

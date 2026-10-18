@@ -31,6 +31,14 @@ app:
   embedding:
     provider: ${APP_EMBEDDING_PROVIDER:fake}
     dimensions: 1536
+  answer:
+    chat-provider: ${APP_CHAT_PROVIDER:fake}
+    retrieval-limit: ${JUMARAG_ANSWER_RETRIEVAL_LIMIT:8}
+    minimum-similarity: ${JUMARAG_ANSWER_MINIMUM_SIMILARITY:0.05}
+    minimum-token-overlap: ${JUMARAG_ANSWER_MINIMUM_TOKEN_OVERLAP:1}
+    max-question-characters: ${JUMARAG_MAX_QUESTION_CHARACTERS:4000}
+    max-context-bytes: ${JUMARAG_MAX_CONTEXT_BYTES:8192}
+    max-context-depth: ${JUMARAG_MAX_CONTEXT_DEPTH:8}
 
 management:
   endpoint:

@@ -10,6 +10,7 @@ import com.jumatech.jumarag.knowledgebase.KnowledgeBase;
 import com.jumatech.jumarag.knowledgebase.KnowledgeBaseService;
 import com.jumatech.jumarag.retrieval.RetrievalService;
 import com.jumatech.jumarag.security.ApiClientService;
+import com.jumatech.jumarag.snapshot.SnapshotService;
 import com.jumatech.jumarag.shared.web.DomainException;
 import java.nio.charset.StandardCharsets;
 import java.util.Map;
@@ -62,6 +63,7 @@ class PhaseOneIntegrationTest {
     @Autowired ApiClientService apiClients;
     @Autowired IngestionService ingestion;
     @Autowired RetrievalService retrieval;
+    @Autowired SnapshotService snapshots;
     @Autowired JdbcClient jdbc;
 
     @Test
@@ -110,7 +112,7 @@ class PhaseOneIntegrationTest {
                         .getStatusCode())
                 .isEqualTo(HttpStatus.UNAUTHORIZED);
 
-        ingestion.ingestText(
+        var securedVersion = ingestion.ingestText(
                 base.id(),
                 "Secured rules",
                 "OFFICIAL_RULE",
@@ -118,6 +120,10 @@ class PhaseOneIntegrationTest {
                 "Bola livre",
                 "Bola livre é uma regra controlada para busca autorizada.",
                 objectMapper.createObjectNode());
+        var securedSnapshot = snapshots.create(
+                base.id(), "Secured snapshot", java.util.List.of(securedVersion.sourceVersionId()),
+                objectMapper.createObjectNode());
+        snapshots.activate(base.id(), securedSnapshot.id());
         String retrievalPath = "/v1/knowledge-bases/" + base.slug() + "/retrieval/search";
         HttpEntity<Map<String, Object>> search = new HttpEntity<>(
                 Map.of("query", "regra bola livre", "language", "pt-BR"), clientHeaders);
@@ -201,21 +207,25 @@ class PhaseOneIntegrationTest {
                         .update())
                 .isInstanceOf(DataIntegrityViolationException.class);
 
+        var snapshot = snapshots.create(
+                base.id(), "Changed rules snapshot", java.util.List.of(changed.sourceVersionId()),
+                objectMapper.createObjectNode());
+        snapshots.activate(base.id(), snapshot.id());
         var client = apiClients.create(unique("text-client"), objectMapper.createObjectNode());
         apiClients.grant(client.client().id(), base.id());
         var hits = retrieval.searchAuthorized(
                 client.client().id(), base.slug(), "falta retorno regra", "pt-BR", null, 10);
-        assertThat(hits).isNotEmpty();
-        assertThat(hits.getFirst().sourceId()).isEqualTo(first.knowledgeSourceId());
+        assertThat(hits.hits()).isNotEmpty();
+        assertThat(hits.hits().getFirst().sourceId()).isEqualTo(first.knowledgeSourceId());
         assertThat(retrieval.searchAuthorized(
-                        client.client().id(), base.slug(), "falta retorno", "en", null, 10))
+                        client.client().id(), base.slug(), "falta retorno", "en", null, 10).hits())
                 .isEmpty();
 
         jdbc.sql("UPDATE knowledge_source SET enabled = false WHERE id = :id")
                 .param("id", first.knowledgeSourceId())
                 .update();
         assertThat(retrieval.searchAuthorized(
-                        client.client().id(), base.slug(), "falta retorno", "pt-BR", null, 10))
+                        client.client().id(), base.slug(), "falta retorno", "pt-BR", null, 10).hits())
                 .isEmpty();
     }
 

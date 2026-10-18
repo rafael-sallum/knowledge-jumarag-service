@@ -18,6 +18,7 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 @RestController
@@ -49,8 +50,12 @@ public final class ApiClientApi {
     }
 
     @PostMapping("/{clientId}/grants")
+    @Operation(summary = "Grant RETRIEVE or ASK", description = "ASK permits internal retrieval for /ask but not direct retrieval/search.")
     KnowledgeBaseGrant grant(@PathVariable UUID clientId, @Valid @RequestBody CreateGrant request) {
-        return service.grant(clientId, request.knowledgeBaseId());
+        KnowledgeBaseGrant.Permission permission = request.permission() == null
+                ? KnowledgeBaseGrant.Permission.RETRIEVE
+                : request.permission();
+        return service.grant(clientId, request.knowledgeBaseId(), permission);
     }
 
     @GetMapping("/{clientId}/grants")
@@ -59,8 +64,11 @@ public final class ApiClientApi {
     }
 
     @DeleteMapping("/{clientId}/grants/{knowledgeBaseId}")
-    ResponseEntity<Void> removeGrant(@PathVariable UUID clientId, @PathVariable UUID knowledgeBaseId) {
-        service.removeGrant(clientId, knowledgeBaseId);
+    ResponseEntity<Void> removeGrant(
+            @PathVariable UUID clientId,
+            @PathVariable UUID knowledgeBaseId,
+            @RequestParam(defaultValue = "RETRIEVE") KnowledgeBaseGrant.Permission permission) {
+        service.removeGrant(clientId, knowledgeBaseId, permission);
         return ResponseEntity.noContent().build();
     }
 
@@ -68,5 +76,7 @@ public final class ApiClientApi {
             @NotBlank @Size(max = 200) String name,
             JsonNode metadata) {}
 
-    public record CreateGrant(@NotNull UUID knowledgeBaseId) {}
+    public record CreateGrant(
+            @NotNull UUID knowledgeBaseId,
+            KnowledgeBaseGrant.Permission permission) {}
 }

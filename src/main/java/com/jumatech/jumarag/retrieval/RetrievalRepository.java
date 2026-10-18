@@ -23,6 +23,7 @@ public class RetrievalRepository {
 
     public List<RetrievalHit> search(
             UUID knowledgeBaseId,
+            UUID snapshotId,
             UUID embeddingProfileId,
             float[] queryEmbedding,
             String language,
@@ -34,6 +35,9 @@ public class RetrievalRepository {
                     ks.id AS source_id,
                     sv.id AS source_version_id,
                     ks.logical_name,
+                    ks.source_classification,
+                    sv.title AS source_title,
+                    sv.original_filename,
                     dc.chunk_index,
                     dc.text,
                     dc.language,
@@ -41,13 +45,19 @@ public class RetrievalRepository {
                     dc.page_start,
                     dc.page_end,
                     dc.metadata::text AS metadata,
+                    ks.metadata::text AS source_metadata,
+                    sv.metadata::text AS source_version_metadata,
                     1 - (ce.embedding <=> CAST(:queryEmbedding AS vector)) AS similarity
                 FROM chunk_embedding ce
                 JOIN document_chunk dc ON dc.id = ce.chunk_id
                 JOIN source_version sv ON sv.id = dc.source_version_id
                 JOIN knowledge_source ks ON ks.id = sv.source_id
                 JOIN knowledge_base kb ON kb.id = ks.knowledge_base_id
+                JOIN knowledge_snapshot_item ksi
+                  ON ksi.source_version_id = sv.id
+                 AND ksi.knowledge_source_id = ks.id
                 WHERE kb.id = :knowledgeBaseId
+                  AND ksi.snapshot_id = :snapshotId
                   AND kb.status = 'ACTIVE'
                   AND ks.enabled = true
                   AND sv.status = 'READY'
@@ -63,6 +73,7 @@ public class RetrievalRepository {
 
         JdbcClient.StatementSpec statement = jdbc.sql(sql.toString())
                 .param("knowledgeBaseId", knowledgeBaseId)
+                .param("snapshotId", snapshotId)
                 .param("embeddingProfileId", embeddingProfileId)
                 .param("queryEmbedding", EmbeddingRepository.vectorLiteral(queryEmbedding))
                 .param("limit", limit);
@@ -81,6 +92,9 @@ public class RetrievalRepository {
                 row.getObject("source_id", UUID.class),
                 row.getObject("source_version_id", UUID.class),
                 row.getString("logical_name"),
+                row.getString("source_classification"),
+                row.getString("source_title"),
+                row.getString("original_filename"),
                 row.getInt("chunk_index"),
                 row.getString("text"),
                 row.getString("language"),
@@ -88,6 +102,8 @@ public class RetrievalRepository {
                 (Integer) row.getObject("page_start"),
                 (Integer) row.getObject("page_end"),
                 json(row.getString("metadata")),
+                json(row.getString("source_metadata")),
+                json(row.getString("source_version_metadata")),
                 row.getDouble("similarity"));
     }
 

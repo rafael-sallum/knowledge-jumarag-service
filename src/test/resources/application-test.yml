@@ -18,3 +18,11 @@ app:
   embedding:
     provider: fake
     dimensions: 1536
+  answer:
+    chat-provider: fake
+    retrieval-limit: 8
+    minimum-similarity: 0.01
+    minimum-token-overlap: 1
+    max-question-characters: 4000
+    max-context-bytes: 1024
+    max-context-depth: 5

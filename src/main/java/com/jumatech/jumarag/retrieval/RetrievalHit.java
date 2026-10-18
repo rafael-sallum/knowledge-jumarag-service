@@ -8,6 +8,9 @@ public record RetrievalHit(
         UUID sourceId,
         UUID sourceVersionId,
         String logicalSourceName,
+        String sourceClassification,
+        String sourceTitle,
+        String originalFilename,
         int chunkIndex,
         String text,
         String language,
@@ -15,4 +18,6 @@ public record RetrievalHit(
         Integer pageStart,
         Integer pageEnd,
         JsonNode metadata,
+        JsonNode sourceMetadata,
+        JsonNode sourceVersionMetadata,
         double similarity) {}

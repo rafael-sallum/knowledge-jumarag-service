@@ -18,7 +18,7 @@ public class OpenApiConfiguration {
                 .info(new Info()
                         .title("JumaRAG evidence retrieval API")
                         .version("v1")
-                        .description("Controlled ingestion and evidence retrieval; no answer generation."))
+                        .description("Snapshot-reproducible evidence retrieval and deterministic grounded answers."))
                 .components(new Components()
                         .addSecuritySchemes(
                                 ADMIN_SCHEME,

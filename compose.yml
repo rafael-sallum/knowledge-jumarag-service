@@ -1,7 +1,7 @@
 name: knowledge-jumarag-service
 
 x-application: &application
-  image: ${JUMARAG_IMAGE:-knowledge-jumarag-service:phase1-local}
+  image: ${JUMARAG_IMAGE:-knowledge-jumarag-service:phase2-local}
   build:
     context: .
   environment: &application-environment
@@ -9,12 +9,16 @@ x-application: &application
     DATABASE_USER: ${POSTGRES_USER:-jumarag}
     DATABASE_PASSWORD: ${POSTGRES_PASSWORD:-change-me-local-only}
     APP_EMBEDDING_PROVIDER: fake
+    APP_CHAT_PROVIDER: fake
     APP_MIGRATIONS_ENABLED: "false"
     JUMARAG_ADMIN_TOKEN: ${JUMARAG_ADMIN_TOKEN:-local-admin-token-change-before-production-123456}
     JUMARAG_API_KEY_PEPPER: ${JUMARAG_API_KEY_PEPPER:-local-api-key-pepper-change-before-production-123456}
     JUMARAG_MAX_UPLOAD_BYTES: ${JUMARAG_MAX_UPLOAD_BYTES:-1048576}
     JUMARAG_MAX_UPLOAD_SIZE: ${JUMARAG_MAX_UPLOAD_SIZE:-1MB}
     JUMARAG_DEFAULT_EMBEDDING_PROFILE: ${JUMARAG_DEFAULT_EMBEDDING_PROFILE:-phase0-fake-1536}
+    JUMARAG_ANSWER_MINIMUM_SIMILARITY: ${JUMARAG_ANSWER_MINIMUM_SIMILARITY:-0.05}
+    JUMARAG_MAX_CONTEXT_BYTES: ${JUMARAG_MAX_CONTEXT_BYTES:-8192}
+    JUMARAG_MAX_CONTEXT_DEPTH: ${JUMARAG_MAX_CONTEXT_DEPTH:-8}
   networks:
     - application
   restart: unless-stopped

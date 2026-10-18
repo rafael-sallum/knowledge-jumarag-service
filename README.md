@@ -1,136 +1,197 @@
 # knowledge-jumarag-service
 
-`knowledge-jumarag-service` is a reusable, versioned, retrieval-grounded domain knowledge service. Salloon Score is its first planned client, but this is not a Salloon chatbot and the core model has no Salloon-specific rules.
+`knowledge-jumarag-service` is a reusable, versioned, retrieval-grounded domain knowledge service. Salloon Score is its first planned client, but the core has no Salloon-specific rules and is not a generic chatbot.
 
-Phase 1 provides authenticated administration and client retrieval, controlled synchronous TEXT/TXT/Markdown ingestion, immutable source versions, deterministic chunking, fake embeddings, and exact PostgreSQL/pgvector evidence retrieval. It still has **no `/ask`, answer generation, citations, real AI provider, crawler, PDF parser, or Salloon integration**.
+Phase 2 adds immutable knowledge snapshots and deterministic grounded answers with validated citations. It uses fake embedding and chat gateways only: there is **no external AI provider, paid credential, model network call, PDF/crawler support, or Salloon integration**.
 
-## Boundary and architecture
+## Boundary and stack
 
-AI and retrieval are consultative. Client domain systems remain authoritative. Salloon's deterministic engine, for example, remains the source of truth for scores, sporting transitions, control, and synchronization.
+AI remains consultative. Client domain systems remain authoritative for their state and decisions.
 
 ```text
- admin bearer token                         client API key + KB grant
-         |                                             |
-  /v1/admin/...                         /v1/knowledge-bases/{slug}/retrieval/search
-         |                                             |
- controlled synchronous ingestion ---------------- exact evidence retrieval
-         |                                             |
-         +--------------- Spring JDBC -----------------+
-                                 |
-                    PostgreSQL 17 + pgvector
-             immutable versions + vector(1536)
-
-      Flyway migration runtime -> API runtime + worker runtime
+ admin bearer token                              client API key + KB grant
+         |                                                   |
+ ingestion -> immutable SourceVersions -> immutable Snapshot |
+                                      active/retired selection
+         |                                                   |
+         +---- exact snapshot-filtered pgvector retrieval ---+
+                                                             |
+                    RETRIEVE evidence          ASK grounded answer
+                                                   |
+                                      deterministic ChatGateway
+                                                   |
+                                      validated citation IDs
 ```
 
-Stack: Java 21, Maven Wrapper 3.9.11, Spring Boot 3.5.16, Spring AI BOM 1.1.8, Spring MVC/Validation/JdbcClient/Actuator, springdoc 2.9.1, PostgreSQL 17, pgvector 0.8.6, Flyway, Micrometer/Prometheus, and Testcontainers. The runtime image is multi-stage and non-root. No JPA, Spring AI schema initializer, paid model, external credential, or model network call is used.
-
-## Security model
-
-- Admin endpoints require `Authorization: Bearer <JUMARAG_ADMIN_TOKEN>`.
-- Client retrieval requires `X-JumaRAG-API-Key: jrag_<public-id>_<secret>`.
-- An enabled client also needs an explicit `RETRIEVE` grant for the requested knowledge base.
-- The raw client key is returned only at creation. PostgreSQL stores the public prefix and an HMAC-SHA-256 digest keyed by `JUMARAG_API_KEY_PEPPER`.
-- Disabling a client revokes the key immediately. Removing a grant revokes that knowledge base only.
-- Liveness, readiness, OpenAPI, and Swagger remain operational endpoints; they grant no business authority.
-
-Admin authentication is intentionally service-level for Phase 1. Production must use independent random admin-token and API-key-pepper values of at least 32 characters. Workload IAM/OAuth2/mTLS is deferred. Do not expose the service directly to the public internet.
+Stack: Java 21, Maven Wrapper 3.9.11, Spring Boot 3.5.16, Spring AI BOM 1.1.8, Spring MVC/Validation/JdbcClient/Actuator, springdoc 2.9.1, PostgreSQL 17, pgvector 0.8.6, Flyway, Micrometer/Prometheus, and Testcontainers. SQL is explicit; Flyway alone owns the schema.
 
 ## Build and local stack
-
-Java 21 is required; the wrapper owns Maven:
 
 ```bash
 ./mvnw test
 ./mvnw verify
 cp .env.example .env
-# Replace the example secrets.
+# Replace example secrets.
 docker compose up --build --wait
 ```
 
-Tests use `pgvector/pgvector:0.8.6-pg17-bookworm`, execute real Flyway migrations and retrieval SQL, and never call a paid provider.
+Compose starts PostgreSQL healthy, runs one-shot migrations, then starts separate API and worker runtimes. Local bindings are API `8080`, worker health `8081`, and PostgreSQL `55433`. Production keeps PostgreSQL private.
 
-Compose starts PostgreSQL healthy → migrations → API and worker. Local ports bind to loopback: API `8080`, worker health `8081`, PostgreSQL `55433`. OpenAPI is at `/v3/api-docs`, Swagger at `/swagger-ui.html`, probes at `/actuator/health/liveness` and `/actuator/health/readiness`, and metrics at `/actuator/prometheus`.
+- OpenAPI: `/v3/api-docs`
+- Swagger: `/swagger-ui.html`
+- liveness: `/actuator/health/liveness`
+- readiness: `/actuator/health/readiness`
+- metrics: `/actuator/prometheus`
 
-The same image supports `APP_RUNTIME=api`, `worker`, and one-shot `migrate`. API/worker do not run migrations. Phase 1 keeps small ingestion synchronous and introduces no unreliable in-memory queue; durable PostgreSQL jobs are deferred.
+## Security and grants
 
-## Phase 1 API walkthrough
+- `/v1/admin/**` requires `Authorization: Bearer <JUMARAG_ADMIN_TOKEN>`.
+- Client endpoints require `X-JumaRAG-API-Key: jrag_<public-id>_<secret>`.
+- Raw client keys are returned once; PostgreSQL stores only the public prefix and a peppered HMAC-SHA-256 digest.
+- `RETRIEVE` permits direct evidence search.
+- `ASK` permits `/ask` and its internal retrieval, but does not permit direct `/retrieval/search`.
+- Grants are explicit per client and Knowledge Base. Neither permission grants administration.
+
+The administrator credential is intentionally a replaceable service secret. Workload IAM/OAuth2/mTLS, rate limiting, key rotation APIs, and public exposure remain deferred.
 
 ```bash
-export API_ROOT='http://127.0.0.1:8080'
-export ADMIN_TOKEN='<admin token from .env>'
-
-# Create a knowledge base.
-curl -sS -X POST "$API_ROOT/v1/admin/knowledge-bases" \
-  -H "Authorization: Bearer $ADMIN_TOKEN" -H 'Content-Type: application/json' \
-  -d '{"slug":"snooker-rules","name":"Snooker Rules","description":"Controlled rules","defaultLocale":"pt-BR"}'
-
-# Create a client; preserve apiKey now because it is returned once.
+# Create a client; apiKey appears only in this response.
 curl -sS -X POST "$API_ROOT/v1/admin/api-clients" \
   -H "Authorization: Bearer $ADMIN_TOKEN" -H 'Content-Type: application/json' \
   -d '{"name":"example-backend","metadata":{"owner":"example"}}'
 
-# Grant RETRIEVE.
-curl -sS -X POST "$API_ROOT/v1/admin/api-clients/<client-id>/grants" \
+# Grants are independent. Omitting permission remains backward-compatible RETRIEVE.
+curl -sS -X POST "$API_ROOT/v1/admin/api-clients/$CLIENT_ID/grants" \
   -H "Authorization: Bearer $ADMIN_TOKEN" -H 'Content-Type: application/json' \
-  -d '{"knowledgeBaseId":"<knowledge-base-id>"}'
-
-# Ingest direct text.
-curl -sS -X POST "$API_ROOT/v1/admin/knowledge-bases/<knowledge-base-id>/sources/text" \
-  -H "Authorization: Bearer $ADMIN_TOKEN" -H 'Content-Type: application/json' \
-  -d '{"logicalName":"Controlled notes","sourceClassification":"IMPLEMENTATION_NOTE","language":"pt-BR","title":"Rule notes","content":"# Bola livre\n\nConteúdo controlado.","metadata":{"edition":"2026"}}'
-
-# Upload bounded UTF-8 TXT or Markdown.
-curl -sS -X POST "$API_ROOT/v1/admin/knowledge-bases/<knowledge-base-id>/sources/file" \
-  -H "Authorization: Bearer $ADMIN_TOKEN" \
-  -F 'logicalName=Official rules' -F 'sourceClassification=OFFICIAL_RULE' \
-  -F 'language=pt-BR' -F 'title=Official rules 2026' \
-  -F 'metadata={"edition":"2026"}' -F 'file=@./rules.md;type=text/markdown'
-
-# Retrieve evidence, not an answer.
-curl -sS -X POST "$API_ROOT/v1/knowledge-bases/snooker-rules/retrieval/search" \
-  -H 'X-JumaRAG-API-Key: <one-time-client-api-key>' -H 'Content-Type: application/json' \
-  -d '{"query":"Quando existe bola livre?","language":"pt-BR","limit":5}'
+  -d "{\"knowledgeBaseId\":\"$KB_ID\",\"permission\":\"ASK\"}"
 ```
 
-Admin APIs also list/disable clients and list/remove grants. The protected Phase-0 low-level source/chunk/embedding proof routes remain for compatibility, but normal ingestion uses the two source ingestion endpoints. OpenAPI documents both schemes. Errors contain stable `code`, safe `message`, and `requestId`; responses carry `X-Request-Id`.
+## Ingestion and immutable versions
 
-## Ingestion and idempotency
+Phase 1 TEXT/TXT/Markdown ingestion remains unchanged:
 
-1. Resolve/create a logical source by knowledge base and logical name.
-2. Normalize Unicode to NFC, CRLF/CR to LF, trailing horizontal whitespace, outer whitespace, and excessive blank lines without lowercasing or semantic rewriting.
-3. SHA-256 the normalized UTF-8 bytes.
-4. Insert one immutable version per `(source_id, checksum)` as `PROCESSING`.
-5. Deterministically chunk with configurable approximate word windows. Defaults target 650 words, cap at 900, overlap 100, and preserve Markdown heading paths plus word offsets.
-6. Generate and persist one configured `phase0-fake-1536` embedding for every chunk.
-7. Validate counts and transition to `READY` in the chunk/embedding transaction.
+1. normalize Unicode/line endings/whitespace deterministically;
+2. SHA-256 normalized UTF-8 content;
+3. create one immutable version per `(source_id, checksum)`;
+4. deterministic paragraph/Markdown-aware chunking;
+5. one `phase0-fake-1536` vector per chunk;
+6. publish `READY` only after chunks and embeddings commit.
 
-Identical normalized content returns the existing version with `duplicate=true`; changed content creates a new version. Failure rolls back chunks/embeddings and records `FAILED`. Retrieval admits only active knowledge bases, enabled sources, `READY` versions, the configured embedding profile, and authorized clients. Concurrent identical requests converge through database uniqueness.
+Repeated identical content is idempotent. Changed content creates another immutable version. Failed processing cannot become retrievable.
 
-A process crash exactly between version registration and processing can leave `PROCESSING`. Recovery of abandoned work is deferred to the durable PostgreSQL job phase instead of pretending an in-memory queue is reliable.
+## Knowledge snapshots
 
-## Configuration and logs
+A snapshot is the exact immutable set of SourceVersions used for retrieval and answers. It contains at most one version per logical source; every version must be `READY`, enabled, and belong to the same Knowledge Base.
 
-- `JUMARAG_ADMIN_TOKEN` — mandatory, 32+ characters;
-- `JUMARAG_API_KEY_PEPPER` — mandatory independent secret, 32+ characters;
-- `JUMARAG_MAX_UPLOAD_BYTES` and `JUMARAG_MAX_UPLOAD_SIZE` — service and servlet limits;
-- `JUMARAG_DEFAULT_EMBEDDING_PROFILE=phase0-fake-1536`;
-- `JUMARAG_CHUNK_TARGET_WORDS`, `JUMARAG_CHUNK_MAX_WORDS`, `JUMARAG_CHUNK_OVERLAP_WORDS`.
+Snapshots transition through:
 
-Never commit `.env`, client keys, source bodies, or provider secrets. Structured logs include request/source/version/client identifiers and counts, never credentials, complete source content, or vectors.
+- `DRAFT`: created but unavailable to clients;
+- `ACTIVE`: default for retrieval and answers;
+- `RETIRED`: previously published and available when explicitly selected.
 
-## Deferred work and recommended Phase 2
+There is at most one active snapshot per Knowledge Base. Activation locks the Knowledge Base, retires the prior active snapshot, and activates the selected snapshot transactionally. Rollback is reactivation of an older snapshot; source versions and snapshot items never change.
 
-Deferred: `/ask`, `ChatModel`, answers, citations, OpenAI/Ollama/Gemini/Anthropic/Azure, hybrid lexical retrieval, reranking, PDF/DOCX/HTML/OCR, URL/sitemaps, snapshots, async jobs, rate limits/quotas, public exposure, UI, end-user identity, and Salloon integration.
+```bash
+curl -sS -X POST "$API_ROOT/v1/admin/knowledge-bases/$KB_ID/snapshots" \
+  -H "Authorization: Bearer $ADMIN_TOKEN" -H 'Content-Type: application/json' \
+  -d '{"name":"rules-2026-10-18","sourceVersionIds":["<version-a>","<version-b>"],"metadata":{"release":"2026-10-18"}}'
 
-Recommended Phase 2 is a provider-neutral grounded-answer boundary over version-selected evidence with machine-readable provenance, `ANSWERED`/`INSUFFICIENT_EVIDENCE`/`CONFLICTING_SOURCES`, a deterministic fake chat adapter for CI, and golden retrieval/grounding evaluations—before any live provider adapter.
+curl -sS -X POST "$API_ROOT/v1/admin/knowledge-bases/$KB_ID/snapshots/$SNAPSHOT_ID/activate" \
+  -H "Authorization: Bearer $ADMIN_TOKEN"
+```
+
+Admin routes also list and get snapshots. A disabled source cannot be activated. A partial unique PostgreSQL index and Knowledge Base row lock enforce one active snapshot under concurrency.
+
+## Snapshot-aware retrieval
+
+Client retrieval searches only the active snapshot by default. It never searches every `READY` version. A published `snapshotId` may be supplied to reproduce a historical result; DRAFT or cross-KB snapshots are rejected.
+
+```bash
+curl -sS -X POST "$API_ROOT/v1/knowledge-bases/snooker-rules/retrieval/search" \
+  -H "X-JumaRAG-API-Key: $CLIENT_KEY" -H 'Content-Type: application/json' \
+  -d '{"query":"When is there a free ball?","language":"en","limit":5}'
+```
+
+The response exposes the Knowledge Base, snapshot, retrieval profile, embedding profile, ranked chunks, and cosine similarities. Thresholds used by answer sufficiency are calibration values, not probabilities.
+
+## Grounded `/ask`
+
+`POST /v1/knowledge-bases/{slug}/ask` requires an `ASK` grant. The pipeline:
+
+1. resolves the active or requested published snapshot;
+2. creates a deterministic fake query embedding;
+3. performs exact pgvector search inside the snapshot;
+4. evaluates evidence sufficiency and explicit conflicts deterministically;
+5. gives only selected evidence and allowed citation IDs to `ChatGateway`;
+6. validates every generated citation before returning it.
+
+```bash
+curl -sS -X POST "$API_ROOT/v1/knowledge-bases/snooker-rules/ask" \
+  -H "X-JumaRAG-API-Key: $CLIENT_KEY" -H 'Content-Type: application/json' \
+  -d '{
+    "question":"When can a free ball be nominated?",
+    "language":"en",
+    "contextSchema":"example.match-context.v1",
+    "context":{"ruleset":"SNOOKER","profile":"SIX_RED"}
+  }'
+```
+
+Answer states:
+
+- `ANSWERED`: usable evidence and at least one validated citation;
+- `INSUFFICIENT_EVIDENCE`: no qualifying controlled evidence; no invented answer;
+- `CONFLICTING_SOURCES`: relevant sources carry the same `assertionKey` with different `assertionValue` metadata; all conflicting evidence is surfaced.
+
+Conflict metadata is a deliberately modest Phase 2 seam, not semantic contradiction detection. Source classification remains visible and no lower-authority source is silently discarded.
+
+## Citations and auditability
+
+Citation IDs (`C1`, `C2`, ...) are assigned before generation. The gateway may reference only those IDs. Unknown IDs fail the generation contract and never escape to clients.
+
+Each citation includes Knowledge Base/snapshot/source/version/chunk IDs, chunk ordinal, logical name, title, source classification, language, heading, filename, optional page location, and deterministic location metadata. Every answer also identifies retrieval/embedding profiles, fake chat provider/model, status, and request ID. Full ask history is not persisted.
+
+## Context and grounding contract
+
+Optional context must be a bounded JSON object. Size, nesting depth, schema identifier, and question length are validated. Context keys never become SQL or retrieval filters. Both context and source text are untrusted data, not executable instructions.
+
+The provider-neutral contract requires future adapters to answer only from supplied evidence, surface insufficiency/conflict, ignore embedded instructions, cite only allowlisted IDs, and never expose chain-of-thought.
+
+## Golden evaluation
+
+The deterministic test harness measures:
+
+- Hit@K-style expected source/heading retrieval;
+- expected answer status;
+- citation coverage against actually retrieved chunks.
+
+Fixtures cover an answerable free-ball question, insufficient evidence, and explicit controlled conflicts. This becomes the comparison baseline for future providers without letting CI call them.
+
+## Configuration
+
+- `APP_CHAT_PROVIDER=fake`
+- `JUMARAG_ANSWER_RETRIEVAL_LIMIT=8`
+- `JUMARAG_ANSWER_MINIMUM_SIMILARITY=0.05`
+- `JUMARAG_ANSWER_MINIMUM_TOKEN_OVERLAP=1`
+- `JUMARAG_MAX_QUESTION_CHARACTERS=4000`
+- `JUMARAG_MAX_CONTEXT_BYTES=8192`
+- `JUMARAG_MAX_CONTEXT_DEPTH=8`
+
+Never log client/admin secrets, question context, full evidence bodies, source bodies, or embedding vectors.
+
+## Current limitations
+
+Deferred: OpenAI/Ollama/Gemini/Anthropic/Azure adapters, real `ChatModel`/`EmbeddingModel`, hybrid FTS/RRF, reranking, semantic conflict detection, PDF/DOCX/HTML/OCR, URL/sitemap ingestion, durable async jobs, automatic snapshot assembly, admin UI, quotas/billing, public exposure, end-user identity, and Salloon integration.
 
 ## Architecture decisions
 
-- [ADR-001](docs/adr/ADR-001-standalone-service.md): standalone service and repository
-- [ADR-002](docs/adr/ADR-002-consultative-ai.md): AI is consultative
-- [ADR-003](docs/adr/ADR-003-postgresql-pgvector-flyway.md): PostgreSQL, pgvector, Flyway
+- [ADR-001](docs/adr/ADR-001-standalone-service.md): standalone service
+- [ADR-002](docs/adr/ADR-002-consultative-ai.md): consultative AI boundary
+- [ADR-003](docs/adr/ADR-003-postgresql-pgvector-flyway.md): PostgreSQL/pgvector/Flyway
 - [ADR-004](docs/adr/ADR-004-deterministic-fake-providers.md): deterministic fake providers
 - [ADR-005](docs/adr/ADR-005-api-client-authentication.md): administrator/client authentication
-- [ADR-006](docs/adr/ADR-006-source-ingestion-versioning.md): source ingestion/versioning
+- [ADR-006](docs/adr/ADR-006-source-ingestion-versioning.md): source versioning
 - [ADR-007](docs/adr/ADR-007-deterministic-chunking.md): deterministic chunking
+- [ADR-008](docs/adr/ADR-008-knowledge-snapshots.md): immutable reproducible snapshots
+- [ADR-009](docs/adr/ADR-009-grounded-answer-generation.md): provider-neutral grounded answers
+- [ADR-010](docs/adr/ADR-010-citation-validation.md): allowlisted citations
+- [ADR-011](docs/adr/ADR-011-golden-evaluation.md): deterministic golden evaluation
