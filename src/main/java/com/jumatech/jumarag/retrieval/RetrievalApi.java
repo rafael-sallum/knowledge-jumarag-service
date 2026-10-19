@@ -39,7 +39,8 @@ public final class RetrievalApi {
         @ApiResponse(responseCode = "401", description = "Missing, invalid, or disabled client key"),
         @ApiResponse(responseCode = "403", description = "Client lacks a RETRIEVE grant"),
         @ApiResponse(responseCode = "404", description = "Knowledge base or snapshot was not found"),
-        @ApiResponse(responseCode = "409", description = "No active snapshot or requested snapshot is not published")
+        @ApiResponse(responseCode = "409", description = "No active snapshot, incompatible embedding profile, or requested snapshot is not published"),
+        @ApiResponse(responseCode = "503", description = "Configured embedding provider is temporarily unavailable")
     })
     SearchResponse search(
             @PathVariable String slug,

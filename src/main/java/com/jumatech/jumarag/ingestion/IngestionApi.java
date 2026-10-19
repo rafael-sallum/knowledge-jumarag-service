@@ -35,13 +35,14 @@ final class IngestionApi {
     @PostMapping(path = "/text", consumes = MediaType.APPLICATION_JSON_VALUE)
     @Operation(
             summary = "Ingest controlled text",
-            description = "Normalizes and checksums content, then atomically creates chunks and fake embeddings. Repeated identical content for the same logical source is idempotent.")
+            description = "Normalizes and checksums content, then atomically creates chunks and embeddings in the explicitly configured profile. Repeated identical content for the same logical source is idempotent.")
     @ApiResponses({
         @ApiResponse(responseCode = "200", description = "Source version is ready or an idempotent version was returned"),
         @ApiResponse(responseCode = "401", description = "Missing or invalid administrator credential"),
         @ApiResponse(responseCode = "409", description = "Logical source identity conflict"),
         @ApiResponse(responseCode = "413", description = "Content exceeds the configured limit"),
-        @ApiResponse(responseCode = "422", description = "Ingestion failed without publishing partial content")
+        @ApiResponse(responseCode = "422", description = "Ingestion failed without publishing partial content"),
+        @ApiResponse(responseCode = "503", description = "Configured embedding provider is temporarily unavailable")
     })
     ResponseEntity<IngestionService.IngestionResult> ingestText(
             @PathVariable UUID knowledgeBaseId,
@@ -69,7 +70,8 @@ final class IngestionApi {
         @ApiResponse(responseCode = "401", description = "Missing or invalid administrator credential"),
         @ApiResponse(responseCode = "409", description = "Logical source identity conflict"),
         @ApiResponse(responseCode = "413", description = "File exceeds the configured limit"),
-        @ApiResponse(responseCode = "422", description = "Unsupported or invalid file content")
+        @ApiResponse(responseCode = "422", description = "Unsupported or invalid file content"),
+        @ApiResponse(responseCode = "503", description = "Configured embedding provider is temporarily unavailable")
     })
     ResponseEntity<IngestionService.IngestionResult> ingestFile(
             @PathVariable UUID knowledgeBaseId,

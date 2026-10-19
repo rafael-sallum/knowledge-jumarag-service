@@ -10,7 +10,9 @@ public record AnswerProperties(
         int minimumTokenOverlap,
         int maxQuestionCharacters,
         int maxContextBytes,
-        int maxContextDepth) {
+        int maxContextDepth,
+        int maxEvidenceChunks,
+        int maxEvidenceCharacters) {
 
     public AnswerProperties {
         chatProvider = chatProvider == null || chatProvider.isBlank() ? "fake" : chatProvider;
@@ -20,7 +22,8 @@ public record AnswerProperties(
         if (minimumSimilarity < -1 || minimumSimilarity > 1) {
             throw new IllegalArgumentException("Minimum similarity must be between -1 and 1.");
         }
-        if (minimumTokenOverlap < 1 || maxQuestionCharacters < 1 || maxContextBytes < 2 || maxContextDepth < 1) {
+        if (minimumTokenOverlap < 1 || maxQuestionCharacters < 1 || maxContextBytes < 2 || maxContextDepth < 1
+                || maxEvidenceChunks < 1 || maxEvidenceChunks > retrievalLimit || maxEvidenceCharacters < 256) {
             throw new IllegalArgumentException("Answer validation limits must be positive.");
         }
     }

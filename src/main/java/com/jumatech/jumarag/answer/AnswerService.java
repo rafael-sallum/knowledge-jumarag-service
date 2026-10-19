@@ -4,6 +4,7 @@ import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.jumatech.jumarag.knowledgebase.KnowledgeBaseService;
+import com.jumatech.jumarag.provider.ProviderException;
 import com.jumatech.jumarag.retrieval.RetrievalHit;
 import com.jumatech.jumarag.retrieval.RetrievalService;
 import com.jumatech.jumarag.security.ApiClientService;
@@ -69,10 +70,11 @@ public final class AnswerService {
                 knowledgeBase.id(), request.question(), language, null,
                 properties.retrievalLimit(), request.snapshotId());
         EvidencePolicy.Assessment assessment = evidencePolicy.assess(request.question(), result.hits());
-        List<Citation> available = citations(knowledgeBase.id(), result.snapshotId(), assessment.evidence());
+        List<RetrievalHit> selectedEvidence = boundedEvidence(assessment.evidence());
+        List<Citation> available = citations(knowledgeBase.id(), result.snapshotId(), selectedEvidence);
         Map<String, Citation> citationsById = new LinkedHashMap<>();
         available.forEach(citation -> citationsById.put(citation.id(), citation));
-        List<ChatGateway.Evidence> gatewayEvidence = assessment.evidence().stream()
+        List<ChatGateway.Evidence> gatewayEvidence = selectedEvidence.stream()
                 .map(hit -> {
                     String id = available.stream()
                             .filter(citation -> citation.documentChunkId().equals(hit.chunkId()))
@@ -80,24 +82,34 @@ public final class AnswerService {
                     return new ChatGateway.Evidence(id, hit.text(), hit.sourceClassification(), hit.headingPath());
                 })
                 .toList();
-        ChatGateway.GenerationResult generated;
+        ChatGateway.GenerationResult generated = localResult(assessment.status(), gatewayEvidence);
         List<String> citedIds;
-        try {
-            generated = chat.generate(new ChatGateway.GenerationRequest(
-                    GROUNDING_INSTRUCTION,
-                    request.question().strip(),
-                    language,
-                    request.contextSchema(),
-                    request.context(),
-                    assessment.status(),
-                    gatewayEvidence));
+        if (assessment.status() == AnswerStatus.ANSWERED) {
+            try {
+                generated = chat.generate(new ChatGateway.GenerationRequest(
+                        GROUNDING_INSTRUCTION,
+                        request.question().strip(),
+                        language,
+                        request.contextSchema(),
+                        request.context(),
+                        assessment.status(),
+                        gatewayEvidence));
+                citedIds = citationValidator.validate(
+                        generated.citationIds(), citationsById.keySet(), assessment.status());
+            } catch (ProviderException exception) {
+                throw new DomainException(
+                        "AI_PROVIDER_UNAVAILABLE",
+                        HttpStatus.SERVICE_UNAVAILABLE,
+                        "Answer provider is temporarily unavailable; retry later.");
+            } catch (IllegalStateException exception) {
+                throw new DomainException(
+                        "CHAT_GROUNDING_CONTRACT_FAILED",
+                        HttpStatus.UNPROCESSABLE_ENTITY,
+                        "Grounded answer generation returned an invalid structured result.");
+            }
+        } else {
             citedIds = citationValidator.validate(
                     generated.citationIds(), citationsById.keySet(), assessment.status());
-        } catch (IllegalStateException exception) {
-            throw new DomainException(
-                    "CHAT_GROUNDING_CONTRACT_FAILED",
-                    HttpStatus.UNPROCESSABLE_ENTITY,
-                    "Grounded answer generation returned an invalid structured result.");
         }
         List<Citation> cited = citedIds.stream().map(citationsById::get).toList();
         metrics.counter("jumarag.answer.completed", "status", assessment.status().name()).increment();
@@ -112,7 +124,50 @@ public final class AnswerService {
                 chat.provider(),
                 chat.model(),
                 cited,
+                generated.usage(),
                 MDC.get(RequestCorrelationFilter.REQUEST_ID));
+    }
+
+    private ChatGateway.GenerationResult localResult(
+            AnswerStatus status, List<ChatGateway.Evidence> evidence) {
+        return switch (status) {
+            case ANSWERED -> null;
+            case INSUFFICIENT_EVIDENCE -> new ChatGateway.GenerationResult(
+                    "The active controlled sources do not provide enough evidence to answer this question.",
+                    List.of());
+            case CONFLICTING_SOURCES -> new ChatGateway.GenerationResult(
+                    "The controlled sources contain conflicting assertions; review the cited evidence.",
+                    evidence.stream().map(ChatGateway.Evidence::citationId).toList());
+        };
+    }
+
+    private List<RetrievalHit> boundedEvidence(List<RetrievalHit> evidence) {
+        if (evidence.isEmpty()) {
+            return List.of();
+        }
+        List<RetrievalHit> selected = new ArrayList<>();
+        int remaining = properties.maxEvidenceCharacters();
+        for (RetrievalHit hit : evidence) {
+            if (selected.size() >= properties.maxEvidenceChunks() || remaining <= 0) {
+                break;
+            }
+            if (hit.text().length() <= remaining) {
+                selected.add(hit);
+                remaining -= hit.text().length();
+            } else if (selected.isEmpty()) {
+                selected.add(withText(hit, hit.text().substring(0, remaining)));
+                remaining = 0;
+            }
+        }
+        return List.copyOf(selected);
+    }
+
+    private static RetrievalHit withText(RetrievalHit hit, String text) {
+        return new RetrievalHit(
+                hit.chunkId(), hit.sourceId(), hit.sourceVersionId(), hit.logicalSourceName(),
+                hit.sourceClassification(), hit.sourceTitle(), hit.originalFilename(), hit.chunkIndex(),
+                text, hit.language(), hit.headingPath(), hit.pageStart(), hit.pageEnd(), hit.metadata(),
+                hit.sourceMetadata(), hit.sourceVersionMetadata(), hit.similarity());
     }
 
     private void validate(AnswerRequest request) {
@@ -190,6 +245,7 @@ public final class AnswerService {
             String chatProvider,
             String chatModel,
             List<Citation> citations,
+            ChatGateway.Usage providerUsage,
             String requestId) {}
 
     public record Citation(

@@ -185,11 +185,13 @@ public class IngestionRepository {
                 .update();
     }
 
-    public Counts counts(UUID versionId) {
+    public Counts counts(UUID versionId, UUID embeddingProfileId) {
         return jdbc.sql("""
                         SELECT
                             COUNT(DISTINCT dc.id) AS chunks,
-                            COUNT(ce.chunk_id) AS embeddings
+                            COUNT(ce.chunk_id) FILTER (
+                                WHERE ce.embedding_profile_id = :embeddingProfileId
+                            ) AS embeddings
                         FROM source_version sv
                         LEFT JOIN document_chunk dc ON dc.source_version_id = sv.id
                         LEFT JOIN chunk_embedding ce ON ce.chunk_id = dc.id
@@ -197,6 +199,7 @@ public class IngestionRepository {
                         GROUP BY sv.id
                         """)
                 .param("versionId", versionId)
+                .param("embeddingProfileId", embeddingProfileId)
                 .query((row, number) -> new Counts(row.getInt("chunks"), row.getInt("embeddings")))
                 .single();
     }

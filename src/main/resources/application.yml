@@ -29,16 +29,32 @@ app:
     overlap-words: ${JUMARAG_CHUNK_OVERLAP_WORDS:100}
     default-embedding-profile: ${JUMARAG_DEFAULT_EMBEDDING_PROFILE:phase0-fake-1536}
   embedding:
-    provider: ${APP_EMBEDDING_PROVIDER:fake}
+    provider: ${JUMARAG_EMBEDDING_PROVIDER:${APP_EMBEDDING_PROVIDER:fake}}
     dimensions: 1536
+  retrieval:
+    embedding-profile: ${JUMARAG_RETRIEVAL_EMBEDDING_PROFILE:${JUMARAG_DEFAULT_EMBEDDING_PROFILE:phase0-fake-1536}}
   answer:
-    chat-provider: ${APP_CHAT_PROVIDER:fake}
+    chat-provider: ${JUMARAG_CHAT_PROVIDER:${APP_CHAT_PROVIDER:fake}}
     retrieval-limit: ${JUMARAG_ANSWER_RETRIEVAL_LIMIT:8}
     minimum-similarity: ${JUMARAG_ANSWER_MINIMUM_SIMILARITY:0.05}
     minimum-token-overlap: ${JUMARAG_ANSWER_MINIMUM_TOKEN_OVERLAP:1}
     max-question-characters: ${JUMARAG_MAX_QUESTION_CHARACTERS:4000}
     max-context-bytes: ${JUMARAG_MAX_CONTEXT_BYTES:8192}
     max-context-depth: ${JUMARAG_MAX_CONTEXT_DEPTH:8}
+    max-evidence-chunks: ${JUMARAG_OPENAI_MAX_EVIDENCE_CHUNKS:6}
+    max-evidence-characters: ${JUMARAG_OPENAI_MAX_EVIDENCE_CHARACTERS:12000}
+  provider:
+    openai:
+      api-key: ${OPENAI_API_KEY:}
+      base-url: ${JUMARAG_OPENAI_BASE_URL:https://api.openai.com}
+      embedding-model: ${JUMARAG_OPENAI_EMBEDDING_MODEL:text-embedding-3-small}
+      embedding-dimensions: ${JUMARAG_OPENAI_EMBEDDING_DIMENSIONS:1536}
+      chat-model: ${JUMARAG_OPENAI_CHAT_MODEL:gpt-4.1-mini}
+      timeout: ${JUMARAG_OPENAI_TIMEOUT_SECONDS:20}s
+      max-output-tokens: ${JUMARAG_OPENAI_MAX_OUTPUT_TOKENS:256}
+    resilience:
+      failure-threshold: ${JUMARAG_PROVIDER_FAILURE_THRESHOLD:3}
+      open-duration: ${JUMARAG_PROVIDER_CIRCUIT_OPEN_SECONDS:30}s
 
 management:
   endpoint:

@@ -1,6 +1,7 @@
 package com.jumatech.jumarag.embedding;
 
 import com.jumatech.jumarag.source.ChunkService;
+import com.jumatech.jumarag.ingestion.IngestionProperties;
 import java.time.Clock;
 import java.time.OffsetDateTime;
 import java.util.UUID;
@@ -12,29 +13,45 @@ public final class EmbeddingService {
     private final ChunkService chunks;
     private final EmbeddingGateway gateway;
     private final EmbeddingRepository repository;
+    private final EmbeddingProfileResolver profiles;
+    private final IngestionProperties properties;
     private final Clock clock;
 
     @Autowired
-    public EmbeddingService(ChunkService chunks, EmbeddingGateway gateway, EmbeddingRepository repository) {
-        this(chunks, gateway, repository, Clock.systemUTC());
+    public EmbeddingService(
+            ChunkService chunks,
+            EmbeddingGateway gateway,
+            EmbeddingRepository repository,
+            EmbeddingProfileResolver profiles,
+            IngestionProperties properties) {
+        this(chunks, gateway, repository, profiles, properties, Clock.systemUTC());
     }
 
-    EmbeddingService(ChunkService chunks, EmbeddingGateway gateway, EmbeddingRepository repository, Clock clock) {
+    EmbeddingService(
+            ChunkService chunks,
+            EmbeddingGateway gateway,
+            EmbeddingRepository repository,
+            EmbeddingProfileResolver profiles,
+            IngestionProperties properties,
+            Clock clock) {
         this.chunks = chunks;
         this.gateway = gateway;
         this.repository = repository;
+        this.profiles = profiles;
+        this.properties = properties;
         this.clock = clock;
     }
 
     public EmbeddedChunk embed(UUID chunkId) {
         var chunk = chunks.require(chunkId);
+        var profile = profiles.requireCompatible(properties.defaultEmbeddingProfile());
         repository.upsert(
                 chunk.id(),
-                EmbeddingRepository.PHASE_ZERO_PROFILE_ID,
+                profile.id(),
                 gateway.embed(chunk.text()),
                 OffsetDateTime.now(clock));
-        return new EmbeddedChunk(chunk.id(), EmbeddingRepository.PHASE_ZERO_PROFILE_ID, gateway.dimensions());
+        return new EmbeddedChunk(chunk.id(), profile.id(), profile.name(), gateway.dimensions());
     }
 
-    public record EmbeddedChunk(UUID chunkId, UUID embeddingProfileId, int dimensions) {}
+    public record EmbeddedChunk(UUID chunkId, UUID embeddingProfileId, String embeddingProfile, int dimensions) {}
 }

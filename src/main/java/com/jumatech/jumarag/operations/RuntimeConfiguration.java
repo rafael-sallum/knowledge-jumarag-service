@@ -2,6 +2,8 @@ package com.jumatech.jumarag.operations;
 
 import com.jumatech.jumarag.ingestion.IngestionProperties;
 import com.jumatech.jumarag.answer.AnswerProperties;
+import com.jumatech.jumarag.provider.ProviderProperties;
+import com.jumatech.jumarag.retrieval.RetrievalProperties;
 import com.jumatech.jumarag.security.SecurityProperties;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -16,7 +18,9 @@ import org.springframework.context.annotation.Configuration;
     RuntimeConfiguration.RuntimeProperties.class,
     SecurityProperties.class,
     IngestionProperties.class,
-    AnswerProperties.class
+    AnswerProperties.class,
+    ProviderProperties.class,
+    RetrievalProperties.class
 })
 public class RuntimeConfiguration {
     private static final Logger log = LoggerFactory.getLogger(RuntimeConfiguration.class);

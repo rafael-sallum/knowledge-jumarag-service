@@ -21,5 +21,15 @@ public interface ChatGateway {
 
     record Evidence(String citationId, String text, String sourceClassification, String headingPath) {}
 
-    record GenerationResult(String answer, List<String> citationIds) {}
+    record GenerationResult(String answer, List<String> citationIds, Usage usage) {
+        public GenerationResult(String answer, List<String> citationIds) {
+            this(answer, citationIds, Usage.none());
+        }
+    }
+
+    record Usage(Integer inputTokens, Integer outputTokens, Integer totalTokens) {
+        public static Usage none() {
+            return new Usage(null, null, null);
+        }
+    }
 }

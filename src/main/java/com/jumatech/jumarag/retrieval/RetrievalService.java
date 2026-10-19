@@ -1,6 +1,7 @@
 package com.jumatech.jumarag.retrieval;
 
 import com.jumatech.jumarag.embedding.EmbeddingGateway;
+import com.jumatech.jumarag.embedding.EmbeddingProfileResolver;
 import com.jumatech.jumarag.embedding.EmbeddingRepository;
 import com.jumatech.jumarag.knowledgebase.KnowledgeBaseService;
 import com.jumatech.jumarag.security.ApiClientService;
@@ -8,6 +9,7 @@ import com.jumatech.jumarag.snapshot.KnowledgeSnapshot;
 import com.jumatech.jumarag.snapshot.SnapshotService;
 import com.jumatech.jumarag.shared.web.DomainException;
 import com.jumatech.jumarag.source.SourceService;
+import com.jumatech.jumarag.provider.ProviderException;
 import io.micrometer.core.instrument.MeterRegistry;
 import java.util.List;
 import java.util.Locale;
@@ -23,6 +25,8 @@ public final class RetrievalService {
     private final SourceService sources;
     private final ApiClientService clients;
     private final SnapshotService snapshots;
+    private final EmbeddingProfileResolver profiles;
+    private final RetrievalProperties properties;
     private final MeterRegistry meterRegistry;
 
     public RetrievalService(
@@ -32,6 +36,8 @@ public final class RetrievalService {
             SourceService sources,
             ApiClientService clients,
             SnapshotService snapshots,
+            EmbeddingProfileResolver profiles,
+            RetrievalProperties properties,
             MeterRegistry meterRegistry) {
         this.repository = repository;
         this.embeddings = embeddings;
@@ -39,6 +45,8 @@ public final class RetrievalService {
         this.sources = sources;
         this.clients = clients;
         this.snapshots = snapshots;
+        this.profiles = profiles;
+        this.properties = properties;
         this.meterRegistry = meterRegistry;
     }
 
@@ -81,13 +89,22 @@ public final class RetrievalService {
                     "Source filter does not belong to the selected knowledge base.");
         }
         KnowledgeSnapshot snapshot = snapshots.resolveForClient(knowledgeBaseId, snapshotId);
-        float[] queryVector = embeddings.embed(query);
+        EmbeddingRepository.EmbeddingProfile profile = profiles.requireCompatible(properties.embeddingProfile());
+        float[] queryVector;
+        try {
+            queryVector = embeddings.embed(query);
+        } catch (ProviderException exception) {
+            throw new DomainException(
+                    "AI_PROVIDER_UNAVAILABLE",
+                    HttpStatus.SERVICE_UNAVAILABLE,
+                    "Embedding provider is temporarily unavailable; retry later.");
+        }
         String finalLanguage = normalizedLanguage;
         List<RetrievalHit> hits = meterRegistry.timer("jumarag.retrieval.duration", "provider", embeddings.provider())
                 .record(() -> repository.search(
                         knowledgeBaseId,
                         snapshot.id(),
-                        EmbeddingRepository.PHASE_ZERO_PROFILE_ID,
+                        profile.id(),
                         queryVector,
                         finalLanguage,
                         sourceId,
@@ -96,7 +113,7 @@ public final class RetrievalService {
                 knowledgeBaseId,
                 snapshot.id(),
                 "EXACT_COSINE",
-                "phase0-fake-1536",
+                profile.name(),
                 hits == null ? List.of() : hits);
     }
 

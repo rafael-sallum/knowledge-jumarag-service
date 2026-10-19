@@ -2,7 +2,7 @@
 
 `knowledge-jumarag-service` is a reusable, versioned, retrieval-grounded domain knowledge service. Salloon Score is its first planned client, but the core has no Salloon-specific rules and is not a generic chatbot.
 
-Phase 2 adds immutable knowledge snapshots and deterministic grounded answers with validated citations. It uses fake embedding and chat gateways only: there is **no external AI provider, paid credential, model network call, PDF/crawler support, or Salloon integration**.
+Phase 3 adds the first real provider adapters while keeping the core provider-neutral. Deterministic fake embedding and chat gateways remain the defaults for local development and CI. OpenAI is opt-in at runtime; no credential is required to build or test the project and no provider call is made unless explicitly selected.
 
 ## Boundary and stack
 
@@ -18,12 +18,12 @@ AI remains consultative. Client domain systems remain authoritative for their st
                                                              |
                     RETRIEVE evidence          ASK grounded answer
                                                    |
-                                      deterministic ChatGateway
+                                      provider-neutral ChatGateway
                                                    |
                                       validated citation IDs
 ```
 
-Stack: Java 21, Maven Wrapper 3.9.11, Spring Boot 3.5.16, Spring AI BOM 1.1.8, Spring MVC/Validation/JdbcClient/Actuator, springdoc 2.9.1, PostgreSQL 17, pgvector 0.8.6, Flyway, Micrometer/Prometheus, and Testcontainers. SQL is explicit; Flyway alone owns the schema.
+Stack: Java 21, Maven Wrapper 3.9.11, Spring Boot 3.5.16, Spring AI BOM 1.1.8 with its OpenAI adapter, Spring MVC/Validation/JdbcClient/Actuator, springdoc 2.9.1, PostgreSQL 17, pgvector 0.8.6, Flyway, Micrometer/Prometheus, and Testcontainers. SQL is explicit; Flyway alone owns the schema.
 
 ## Build and local stack
 
@@ -74,7 +74,7 @@ Phase 1 TEXT/TXT/Markdown ingestion remains unchanged:
 2. SHA-256 normalized UTF-8 content;
 3. create one immutable version per `(source_id, checksum)`;
 4. deterministic paragraph/Markdown-aware chunking;
-5. one `phase0-fake-1536` vector per chunk;
+5. one vector per chunk in the explicitly configured ingestion profile;
 6. publish `READY` only after chunks and embeddings commit.
 
 Repeated identical content is idempotent. Changed content creates another immutable version. Failed processing cannot become retrievable.
@@ -119,10 +119,10 @@ The response exposes the Knowledge Base, snapshot, retrieval profile, embedding 
 `POST /v1/knowledge-bases/{slug}/ask` requires an `ASK` grant. The pipeline:
 
 1. resolves the active or requested published snapshot;
-2. creates a deterministic fake query embedding;
+2. creates a query embedding using the explicitly selected retrieval profile;
 3. performs exact pgvector search inside the snapshot;
 4. evaluates evidence sufficiency and explicit conflicts deterministically;
-5. gives only selected evidence and allowed citation IDs to `ChatGateway`;
+5. gives only bounded selected evidence and allowed citation IDs to `ChatGateway` when the local evidence policy returns `ANSWERED`;
 6. validates every generated citation before returning it.
 
 ```bash
@@ -148,13 +148,71 @@ Conflict metadata is a deliberately modest Phase 2 seam, not semantic contradict
 
 Citation IDs (`C1`, `C2`, ...) are assigned before generation. The gateway may reference only those IDs. Unknown IDs fail the generation contract and never escape to clients.
 
-Each citation includes Knowledge Base/snapshot/source/version/chunk IDs, chunk ordinal, logical name, title, source classification, language, heading, filename, optional page location, and deterministic location metadata. Every answer also identifies retrieval/embedding profiles, fake chat provider/model, status, and request ID. Full ask history is not persisted.
+Each citation includes Knowledge Base/snapshot/source/version/chunk IDs, chunk ordinal, logical name, title, source classification, language, heading, filename, optional page location, and deterministic location metadata. Every answer also identifies retrieval/embedding profiles, provider-neutral chat provider/model, status, request ID, and optional safe token usage. Full ask history is not persisted.
 
 ## Context and grounding contract
 
 Optional context must be a bounded JSON object. Size, nesting depth, schema identifier, and question length are validated. Context keys never become SQL or retrieval filters. Both context and source text are untrusted data, not executable instructions.
 
 The provider-neutral contract requires future adapters to answer only from supplied evidence, surface insufficiency/conflict, ignore embedded instructions, cite only allowlisted IDs, and never expose chain-of-thought.
+
+## Provider selection and vector-space isolation
+
+`EmbeddingGateway` and `ChatGateway` remain application ports. The runtime independently selects fake or OpenAI infrastructure adapters:
+
+```dotenv
+JUMARAG_EMBEDDING_PROVIDER=fake
+JUMARAG_CHAT_PROVIDER=fake
+JUMARAG_DEFAULT_EMBEDDING_PROFILE=phase0-fake-1536
+JUMARAG_RETRIEVAL_EMBEDDING_PROFILE=phase0-fake-1536
+```
+
+For an explicitly enabled OpenAI development runtime:
+
+```dotenv
+OPENAI_API_KEY=<set-locally>
+JUMARAG_EMBEDDING_PROVIDER=openai
+JUMARAG_CHAT_PROVIDER=openai
+JUMARAG_DEFAULT_EMBEDDING_PROFILE=openai-text-embedding-3-small-1536
+JUMARAG_RETRIEVAL_EMBEDDING_PROFILE=openai-text-embedding-3-small-1536
+JUMARAG_OPENAI_EMBEDDING_MODEL=text-embedding-3-small
+JUMARAG_OPENAI_CHAT_MODEL=gpt-4.1-mini
+```
+
+The fake and OpenAI vectors are different vector spaces even though both have 1,536 dimensions. The persisted profiles are distinct, ingestion and retrieval resolve an exact profile, and the SQL query joins by that profile ID. They are never compared together. A snapshot fixes source versions; an embedding profile fixes their vector representation. Those concepts remain independent.
+
+The OpenAI profile is `OPENAI / text-embedding-3-small / 1536 / COSINE`. The adapter requests 1,536 dimensions explicitly and rejects any incompatible response. `gpt-4.1-mini` is the cost-conscious development chat default, but the model remains runtime-configurable.
+
+Spring AI 1.1.8 provides a clean Chat Completions integration with strict JSON Schema output, which Phase 3 uses behind `ChatGateway`. Its OpenAI adapter does not expose the Responses API cleanly enough for this contract without bypassing Spring AI; a future adapter can adopt Responses without changing the core port.
+
+### Re-embedding existing chunks
+
+Existing immutable chunks can receive another explicit vector profile without re-ingestion:
+
+```bash
+curl -sS -X POST "$API_ROOT/v1/admin/knowledge-bases/$KB_ID/embeddings/backfill" \
+  -H "Authorization: Bearer $ADMIN_TOKEN" -H 'Content-Type: application/json' \
+  -d '{
+    "embeddingProfile":"openai-text-embedding-3-small-1536",
+    "snapshotId":"<optional-snapshot-id>",
+    "batchSize":25
+  }'
+```
+
+Backfill is administrator-only, synchronous and bounded to 100 chunks per call. It takes a database advisory lock per Knowledge Base/profile, skips existing vectors, and is idempotent through the existing `(chunk_id, embedding_profile_id)` primary key. Successfully completed vectors commit if a later provider call fails; retry resumes only missing work. Fake vectors, source versions, and snapshots are never changed. Larger corpora require a future durable job runner.
+
+## Provider resilience and cost controls
+
+- OpenAI connect/read calls use the configured bounded timeout (20 seconds by default).
+- A local per-process circuit opens after three consecutive failures for 30 seconds by default.
+- Spring AI retry attempts are set to one, avoiding hidden multiplication of paid calls.
+- provider failures map to safe `503` errors without response bodies, credentials, prompts, evidence, context, or vectors in logs;
+- questions, context depth/bytes, retrieved evidence count/characters, output tokens, and backfill batch size are bounded;
+- `INSUFFICIENT_EVIDENCE` and `CONFLICTING_SOURCES` are decided locally and do not invoke paid chat generation;
+- readiness remains database-based and never depends on OpenAI reachability;
+- Micrometer records provider/model/operation outcome and duration; optional token usage is returned without making the public contract provider-specific.
+
+When an OpenAI adapter is selected without `OPENAI_API_KEY`, startup fails clearly. Fake mode boots without the key. Keep the key only in ignored local `.env` or production secret management; never use Docker build arguments or commit credentials. Actuator exposes only health, info, and Prometheus and never environment/configuration endpoints.
 
 ## Golden evaluation
 
@@ -164,23 +222,34 @@ The deterministic test harness measures:
 - expected answer status;
 - citation coverage against actually retrieved chunks.
 
-Fixtures cover an answerable free-ball question, insufficient evidence, and explicit controlled conflicts. This becomes the comparison baseline for future providers without letting CI call them.
+Fixtures cover an answerable free-ball question, insufficient evidence, and explicit controlled conflicts. Reports identify the embedding profile so the same corpus can be evaluated manually against fake and OpenAI spaces while CI remains deterministic and provider-free.
 
 ## Configuration
 
-- `APP_CHAT_PROVIDER=fake`
+- `JUMARAG_EMBEDDING_PROVIDER=fake`
+- `JUMARAG_CHAT_PROVIDER=fake`
+- `JUMARAG_DEFAULT_EMBEDDING_PROFILE=phase0-fake-1536`
+- `JUMARAG_RETRIEVAL_EMBEDDING_PROFILE=phase0-fake-1536`
 - `JUMARAG_ANSWER_RETRIEVAL_LIMIT=8`
 - `JUMARAG_ANSWER_MINIMUM_SIMILARITY=0.05`
 - `JUMARAG_ANSWER_MINIMUM_TOKEN_OVERLAP=1`
 - `JUMARAG_MAX_QUESTION_CHARACTERS=4000`
 - `JUMARAG_MAX_CONTEXT_BYTES=8192`
 - `JUMARAG_MAX_CONTEXT_DEPTH=8`
+- `JUMARAG_OPENAI_MAX_EVIDENCE_CHUNKS=6`
+- `JUMARAG_OPENAI_MAX_EVIDENCE_CHARACTERS=12000`
+- `JUMARAG_OPENAI_TIMEOUT_SECONDS=20`
+- `JUMARAG_OPENAI_MAX_OUTPUT_TOKENS=256`
+- `JUMARAG_PROVIDER_FAILURE_THRESHOLD=3`
+- `JUMARAG_PROVIDER_CIRCUIT_OPEN_SECONDS=30`
 
 Never log client/admin secrets, question context, full evidence bodies, source bodies, or embedding vectors.
 
 ## Current limitations
 
-Deferred: OpenAI/Ollama/Gemini/Anthropic/Azure adapters, real `ChatModel`/`EmbeddingModel`, hybrid FTS/RRF, reranking, semantic conflict detection, PDF/DOCX/HTML/OCR, URL/sitemap ingestion, durable async jobs, automatic snapshot assembly, admin UI, quotas/billing, public exposure, end-user identity, and Salloon integration.
+OpenAI is the only real adapter. The service has no multi-provider routing, usage quotas, durable high-volume embedding jobs, provider-backed semantic conflict detection, or production provider health probe. The circuit breaker is process-local, appropriate for initial single-replica operation.
+
+Deferred: Salloon integration, Ollama/Gemini/Anthropic/Azure, Responses API migration, hybrid FTS/RRF, reranking, semantic conflict detection, PDF/DOCX/HTML/OCR, URL/sitemap ingestion, durable async jobs/batching, automatic snapshot assembly, admin UI, quotas/billing, public exposure, and end-user identity.
 
 ## Architecture decisions
 
@@ -195,3 +264,6 @@ Deferred: OpenAI/Ollama/Gemini/Anthropic/Azure adapters, real `ChatModel`/`Embed
 - [ADR-009](docs/adr/ADR-009-grounded-answer-generation.md): provider-neutral grounded answers
 - [ADR-010](docs/adr/ADR-010-citation-validation.md): allowlisted citations
 - [ADR-011](docs/adr/ADR-011-golden-evaluation.md): deterministic golden evaluation
+- [ADR-012](docs/adr/ADR-012-provider-neutral-real-ai.md): provider-neutral real AI adapters
+- [ADR-013](docs/adr/ADR-013-embedding-profile-isolation.md): vector-space identity and safe backfill
+- [ADR-014](docs/adr/ADR-014-provider-resilience-and-cost-guards.md): failure isolation and bounded cost

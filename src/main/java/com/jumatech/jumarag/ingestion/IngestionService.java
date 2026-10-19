@@ -3,8 +3,10 @@ package com.jumatech.jumarag.ingestion;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.jumatech.jumarag.embedding.EmbeddingGateway;
+import com.jumatech.jumarag.embedding.EmbeddingProfileResolver;
 import com.jumatech.jumarag.embedding.EmbeddingRepository;
 import com.jumatech.jumarag.knowledgebase.KnowledgeBaseService;
+import com.jumatech.jumarag.provider.ProviderException;
 import com.jumatech.jumarag.shared.web.DomainException;
 import com.jumatech.jumarag.source.KnowledgeSource;
 import com.jumatech.jumarag.source.SourceVersion;
@@ -39,6 +41,7 @@ public final class IngestionService {
     private final ChunkingService chunking;
     private final EmbeddingGateway embeddingGateway;
     private final EmbeddingRepository embeddings;
+    private final EmbeddingProfileResolver profiles;
     private final IngestionProperties properties;
     private final ObjectMapper objectMapper;
     private final TransactionTemplate transactions;
@@ -53,6 +56,7 @@ public final class IngestionService {
             ChunkingService chunking,
             EmbeddingGateway embeddingGateway,
             EmbeddingRepository embeddings,
+            EmbeddingProfileResolver profiles,
             IngestionProperties properties,
             ObjectMapper objectMapper,
             TransactionTemplate transactions,
@@ -64,6 +68,7 @@ public final class IngestionService {
                 chunking,
                 embeddingGateway,
                 embeddings,
+                profiles,
                 properties,
                 objectMapper,
                 transactions,
@@ -78,6 +83,7 @@ public final class IngestionService {
             ChunkingService chunking,
             EmbeddingGateway embeddingGateway,
             EmbeddingRepository embeddings,
+            EmbeddingProfileResolver profiles,
             IngestionProperties properties,
             ObjectMapper objectMapper,
             TransactionTemplate transactions,
@@ -89,6 +95,7 @@ public final class IngestionService {
         this.chunking = chunking;
         this.embeddingGateway = embeddingGateway;
         this.embeddings = embeddings;
+        this.profiles = profiles;
         this.properties = properties;
         this.objectMapper = objectMapper;
         this.transactions = transactions;
@@ -194,13 +201,13 @@ public final class IngestionService {
             throw new DomainException("SOURCE_CONTENT_TOO_LARGE", HttpStatus.PAYLOAD_TOO_LARGE, "Source content exceeds the configured limit.");
         }
         String locale = Locale.forLanguageTag(input.language()).toLanguageTag();
-        EmbeddingRepository.EmbeddingProfile profile = profile();
+        EmbeddingRepository.EmbeddingProfile profile = profiles.requireCompatible(properties.defaultEmbeddingProfile());
         PreparedIngestion prepared = transactions.execute(status -> prepare(input, normalized, locale));
         if (prepared == null) {
             throw new IllegalStateException("Ingestion preparation did not return a result.");
         }
         if (!prepared.process()) {
-            return result(prepared.sourceId(), prepared.version(), true);
+            return result(prepared.sourceId(), prepared.version(), true, profile);
         }
 
         Timer.Sample sample = Timer.start(metrics);
@@ -218,7 +225,11 @@ public final class IngestionService {
                     prepared.sourceId(),
                     prepared.version().id(),
                     generated.size());
-            return result(prepared.sourceId(), repository.requireVersion(prepared.version().id()), prepared.duplicate());
+            return result(
+                    prepared.sourceId(),
+                    repository.requireVersion(prepared.version().id()),
+                    prepared.duplicate(),
+                    profile);
         } catch (RuntimeException exception) {
             transactions.executeWithoutResult(status -> repository.markFailed(
                     prepared.version().id(), "PROCESSING_ERROR", OffsetDateTime.now(clock)));
@@ -229,9 +240,14 @@ public final class IngestionService {
                     prepared.sourceId(),
                     prepared.version().id(),
                     exception.getClass().getSimpleName());
+            if (exception instanceof ProviderException) {
+                throw new DomainException(
+                        "AI_PROVIDER_UNAVAILABLE",
+                        HttpStatus.SERVICE_UNAVAILABLE,
+                        "Embedding provider is temporarily unavailable; source content remains safely retryable.");
+            }
             throw new DomainException(
-                    "SOURCE_INGESTION_FAILED",
-                    HttpStatus.UNPROCESSABLE_ENTITY,
+                    "SOURCE_INGESTION_FAILED", HttpStatus.UNPROCESSABLE_ENTITY,
                     "Source ingestion failed without publishing partial content.");
         } finally {
             sample.stop(metrics.timer("jumarag.ingestion.duration", "sourceType", input.type().name()));
@@ -286,15 +302,19 @@ public final class IngestionService {
             repository.insertChunk(chunkId, versionId, chunk, language, now);
             embeddings.upsert(chunkId, profile.id(), embeddingGateway.embed(chunk.text()), now);
         }
-        IngestionRepository.Counts counts = repository.counts(versionId);
+        IngestionRepository.Counts counts = repository.counts(versionId, profile.id());
         if (counts.chunks() != chunks.size() || counts.embeddings() != chunks.size()) {
             throw new IllegalStateException("Chunk and embedding counts do not match the ingestion plan.");
         }
         repository.markReady(versionId, now);
     }
 
-    private IngestionResult result(UUID sourceId, IngestionRepository.VersionState version, boolean duplicate) {
-        IngestionRepository.Counts counts = repository.counts(version.id());
+    private IngestionResult result(
+            UUID sourceId,
+            IngestionRepository.VersionState version,
+            boolean duplicate,
+            EmbeddingRepository.EmbeddingProfile profile) {
+        IngestionRepository.Counts counts = repository.counts(version.id(), profile.id());
         return new IngestionResult(
                 sourceId,
                 version.id(),
@@ -302,18 +322,8 @@ public final class IngestionService {
                 version.status(),
                 duplicate,
                 counts.chunks(),
-                counts.embeddings());
-    }
-
-    private EmbeddingRepository.EmbeddingProfile profile() {
-        EmbeddingRepository.EmbeddingProfile profile = embeddings.findProfileByName(properties.defaultEmbeddingProfile())
-                .orElseThrow(() -> new IllegalStateException("Configured embedding profile does not exist."));
-        if (profile.dimensions() != embeddingGateway.dimensions()
-                || !profile.provider().equals(embeddingGateway.provider())
-                || !profile.model().equals(embeddingGateway.model())) {
-            throw new IllegalStateException("Embedding gateway is incompatible with the configured profile.");
-        }
-        return profile;
+                counts.embeddings(),
+                profile.name());
     }
 
     private static void validate(IngestionInput input) {
@@ -388,5 +398,6 @@ public final class IngestionService {
             SourceVersion.Status status,
             boolean duplicate,
             int chunkCount,
-            int embeddingCount) {}
+            int embeddingCount,
+            String embeddingProfile) {}
 }

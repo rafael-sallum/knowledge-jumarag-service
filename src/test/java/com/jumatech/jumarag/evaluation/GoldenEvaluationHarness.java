@@ -4,6 +4,8 @@ import com.jumatech.jumarag.answer.AnswerService;
 import com.jumatech.jumarag.answer.AnswerStatus;
 import com.jumatech.jumarag.retrieval.RetrievalService;
 import java.util.List;
+import java.util.Set;
+import java.util.stream.Collectors;
 
 public final class GoldenEvaluationHarness {
     public Evaluation evaluate(
@@ -20,7 +22,8 @@ public final class GoldenEvaluationHarness {
                 || (!answer.citations().isEmpty()
                         && answer.citations().stream().allMatch(citation -> retrieval.hits().stream()
                                 .anyMatch(hit -> hit.chunkId().equals(citation.documentChunkId()))));
-        return new Evaluation(hitAtK ? 1.0 : 0.0, expectedStatus, validCitationCoverage);
+        return new Evaluation(
+                retrieval.embeddingProfile(), hitAtK ? 1.0 : 0.0, expectedStatus, validCitationCoverage);
     }
 
     public record GoldenCase(
@@ -29,7 +32,8 @@ public final class GoldenEvaluationHarness {
             String expectedHeading,
             AnswerStatus expectedStatus) {}
 
-    public record Evaluation(double hitAtK, boolean expectedStatus, boolean validCitationCoverage) {
+    public record Evaluation(
+            String embeddingProfile, double hitAtK, boolean expectedStatus, boolean validCitationCoverage) {
         public boolean passed() {
             return hitAtK == 1.0 && expectedStatus && validCitationCoverage;
         }
@@ -39,8 +43,16 @@ public final class GoldenEvaluationHarness {
         double hitRate = evaluations.stream().mapToDouble(Evaluation::hitAtK).average().orElse(0);
         long statuses = evaluations.stream().filter(Evaluation::expectedStatus).count();
         long citationCoverage = evaluations.stream().filter(Evaluation::validCitationCoverage).count();
-        return new Summary(hitRate, statuses, citationCoverage, evaluations.size());
+        Set<String> profiles = evaluations.stream()
+                .map(Evaluation::embeddingProfile)
+                .collect(Collectors.toUnmodifiableSet());
+        return new Summary(profiles, hitRate, statuses, citationCoverage, evaluations.size());
     }
 
-    public record Summary(double hitAtK, long expectedStatuses, long validCitationCoverage, int cases) {}
+    public record Summary(
+            Set<String> embeddingProfiles,
+            double hitAtK,
+            long expectedStatuses,
+            long validCitationCoverage,
+            int cases) {}
 }

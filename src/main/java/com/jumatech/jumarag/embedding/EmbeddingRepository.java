@@ -9,6 +9,8 @@ import org.springframework.stereotype.Repository;
 @Repository
 public class EmbeddingRepository {
     public static final UUID PHASE_ZERO_PROFILE_ID = UUID.fromString("00000000-0000-4000-8000-000000001536");
+    public static final UUID OPENAI_TEXT_EMBEDDING_3_SMALL_PROFILE_ID =
+            UUID.fromString("00000000-0000-4000-8000-000000003153");
     private static final int PHASE_ZERO_DIMENSIONS = 1536;
     private final JdbcClient jdbc;
 

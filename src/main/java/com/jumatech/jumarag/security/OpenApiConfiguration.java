@@ -16,9 +16,9 @@ public class OpenApiConfiguration {
     OpenAPI jumaRagOpenApi() {
         return new OpenAPI()
                 .info(new Info()
-                        .title("JumaRAG evidence retrieval API")
+                        .title("JumaRAG grounded knowledge API")
                         .version("v1")
-                        .description("Snapshot-reproducible evidence retrieval and deterministic grounded answers."))
+                        .description("Snapshot-reproducible evidence retrieval and grounded answers through provider-neutral gateways."))
                 .components(new Components()
                         .addSecuritySchemes(
                                 ADMIN_SCHEME,

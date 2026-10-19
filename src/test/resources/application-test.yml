@@ -18,6 +18,8 @@ app:
   embedding:
     provider: fake
     dimensions: 1536
+  retrieval:
+    embedding-profile: phase0-fake-1536
   answer:
     chat-provider: fake
     retrieval-limit: 8
@@ -26,3 +28,5 @@ app:
     max-question-characters: 4000
     max-context-bytes: 1024
     max-context-depth: 5
+    max-evidence-chunks: 6
+    max-evidence-characters: 12000
