@@ -279,6 +279,17 @@ Phase 4A fixtures additionally compare focused RAG, bounded complete snapshots, 
 
 Never log client/admin secrets, question context, full evidence bodies, source bodies, or embedding vectors.
 
+## Salloon knowledge onboarding
+
+Salloon Score is the first real domain onboarded through controlled content rather than runtime coupling. Phase 4B defines two independent Knowledge Bases:
+
+- `salloon-snooker-rules` for the current WPBSA rulebook and Salloon Snooker implementation notes;
+- `salloon-brazilian-rules` for CBBS Sinuca rules, the complementary billiards regulation and Salloon Brazilian implementation notes.
+
+Authoritative third-party documents are not committed. Reviewed manifests contain canonical URLs, edition/revision, retrieval date and SHA-256. A controlled preparation script extracts locally acquired artifacts into ignored `.local/knowledge-sources`; the existing TEXT/Markdown ingestion API then creates immutable source versions and embeddings. First-party implementation notes cite the read-only Salloon engine/tests and label matches, specializations, simplifications, differences and unresolved reviews explicitly.
+
+The onboarding package includes 30 evidence-oriented golden questions, an idempotent bootstrap, a bounded strategy-comparison script, `salloon.match-context.v1`, and the future backend-to-backend contract. See [the onboarding guide](knowledge/onboarding/salloon/README.md). Live Salloon API/frontend integration remains deferred.
+
 ## Current limitations
 
 OpenAI is the only real adapter. The service has no multi-provider routing, usage quotas, durable high-volume embedding jobs, provider-backed semantic conflict detection, or production provider health probe. The circuit breaker is process-local, appropriate for initial single-replica operation.
@@ -302,3 +313,4 @@ Deferred: Salloon integration, Ollama/Gemini/Anthropic/Azure, Responses API migr
 - [ADR-013](docs/adr/ADR-013-embedding-profile-isolation.md): vector-space identity and safe backfill
 - [ADR-014](docs/adr/ADR-014-provider-resilience-and-cost-guards.md): failure isolation and bounded cost
 - [ADR-015](docs/adr/ADR-015-context-strategy-orchestration.md): provider-neutral context strategy orchestration
+- [ADR-016](docs/adr/ADR-016-salloon-knowledge-onboarding.md): controlled Salloon knowledge onboarding

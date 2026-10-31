@@ -1,0 +1,21 @@
+{
+  "schemaVersion": "jumarag.source-manifest.v1",
+  "logicalName": "CBBS Regulamento dos Esportes do Bilhar 2013",
+  "governingBody": "Confederação Brasileira de Bilhar e Sinuca",
+  "landingPage": "https://snookercbbs.com/regras/",
+  "canonicalUrl": "https://snookercbbs.com/wp-content/uploads/2014/08/RegulamentoEsportesdoBilhar2013.doc",
+  "documentTitle": "Regulamento dos Esportes do Bilhar",
+  "edition": "2013",
+  "revision": "2013",
+  "publicationDate": "2013",
+  "retrievedAt": "2026-10-31",
+  "sourceClassification": "OFFICIAL_RULE",
+  "language": "pt-BR",
+  "mediaType": "application/msword",
+  "artifactFileName": "cbbs-regulamento-esportes-bilhar-2013.doc",
+  "artifactByteSize": 607744,
+  "sha256": "52d7e0d832314d17498f339e0480f4fd7c9aad920cdfa1c51080e596affd54f9",
+  "localPreparedFile": ".local/knowledge-sources/brazilian/cbbs-regulamento-esportes-bilhar-2013.prepared.md",
+  "rights": "Official CBBS third-party material. Local retrieval-grounding use only; source artifact and extracted text must not be committed or redistributed.",
+  "notes": "The CBBS rules landing page linked this complementary regulation when verified on 2026-10-31. Word conversion does not preserve reliable original page boundaries, so future citations should prefer article/section headings rather than fabricated page numbers."
+}

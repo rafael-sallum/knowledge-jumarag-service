@@ -1,0 +1,160 @@
+{
+  "schemaVersion": "jumarag.golden-cases.v1",
+  "knowledgeBaseSlug": "salloon-brazilian-rules",
+  "cases": [
+    {
+      "id": "brazilian-ball-on",
+      "question": "O que é a bola da vez na Sinuca brasileira?",
+      "language": "pt-BR",
+      "expectedStatus": "ANSWERED",
+      "expectedTopic": "bola-da-vez",
+      "expectedSourceClassifications": ["OFFICIAL_RULE"],
+      "expectedLogicalSources": ["CBBS Regras da Sinuca 2012"],
+      "requireOfficialEvidence": true,
+      "requireImplementationEvidence": false
+    },
+    {
+      "id": "brazilian-colour-castigo",
+      "question": "Posso tentar uma colorida antes da bola da vez e qual é a consequência se eu errar?",
+      "language": "pt-BR",
+      "expectedStatus": "ANSWERED",
+      "expectedTopic": "bola-com-castigo",
+      "expectedSourceClassifications": ["OFFICIAL_RULE"],
+      "expectedLogicalSources": ["CBBS Regras da Sinuca 2012"],
+      "requireOfficialEvidence": true,
+      "requireImplementationEvidence": false
+    },
+    {
+      "id": "brazilian-free-colour",
+      "question": "Depois de encaçapar a bola da vez, como funciona a colorida livre?",
+      "language": "pt-BR",
+      "expectedStatus": "ANSWERED",
+      "expectedTopic": "colorida-livre",
+      "expectedSourceClassifications": ["OFFICIAL_RULE"],
+      "expectedLogicalSources": ["CBBS Regras da Sinuca 2012"],
+      "requireOfficialEvidence": true,
+      "requireImplementationEvidence": false
+    },
+    {
+      "id": "brazilian-foul-penalty",
+      "question": "Quantos pontos uma falta técnica concede ao adversário na Sinuca brasileira?",
+      "language": "pt-BR",
+      "expectedStatus": "ANSWERED",
+      "expectedTopic": "penalidade-falta",
+      "expectedSourceClassifications": ["OFFICIAL_RULE"],
+      "expectedLogicalSources": ["CBBS Regras da Sinuca 2012"],
+      "requireOfficialEvidence": true,
+      "requireImplementationEvidence": false
+    },
+    {
+      "id": "brazilian-salloon-fixed-seven",
+      "question": "Como o Salloon registra a penalidade de falta na regra brasileira atual?",
+      "language": "pt-BR",
+      "expectedStatus": "ANSWERED",
+      "expectedTopic": "penalidade-implementacao",
+      "expectedSourceClassifications": ["IMPLEMENTATION_NOTE"],
+      "expectedLogicalSources": ["Salloon Score Brazilian sinuca implementation notes"],
+      "requireOfficialEvidence": false,
+      "requireImplementationEvidence": true
+    },
+    {
+      "id": "brazilian-return-balls",
+      "question": "Quais bolas retornam às marcas depois de uma tacada?",
+      "language": "pt-BR",
+      "expectedStatus": "ANSWERED",
+      "expectedTopic": "retorno-bolas",
+      "expectedSourceClassifications": ["OFFICIAL_RULE"],
+      "expectedLogicalSources": ["CBBS Regras da Sinuca 2012"],
+      "requireOfficialEvidence": true,
+      "requireImplementationEvidence": false
+    },
+    {
+      "id": "brazilian-refusal",
+      "question": "Quando o jogador pode recusar a jogada e passá-la de volta ao adversário?",
+      "language": "pt-BR",
+      "expectedStatus": "ANSWERED",
+      "expectedTopic": "recusa-passagem",
+      "expectedSourceClassifications": ["OFFICIAL_RULE"],
+      "expectedLogicalSources": ["CBBS Regras da Sinuca 2012"],
+      "requireOfficialEvidence": true,
+      "requireImplementationEvidence": false
+    },
+    {
+      "id": "brazilian-refusal-difference",
+      "question": "O Salloon preserva a escolha oficial de recusar e devolver a ação depois de uma falta?",
+      "language": "pt-BR",
+      "expectedStatus": "ANSWERED",
+      "expectedTopic": "recusa-implementacao",
+      "expectedSourceClassifications": ["OFFICIAL_RULE", "IMPLEMENTATION_NOTE"],
+      "expectedLogicalSources": ["CBBS Regras da Sinuca 2012", "Salloon Score Brazilian sinuca implementation notes"],
+      "requireOfficialEvidence": true,
+      "requireImplementationEvidence": true
+    },
+    {
+      "id": "brazilian-total-partial-snooker",
+      "question": "Qual é a diferença entre sinuca total e parcial?",
+      "language": "pt-BR",
+      "expectedStatus": "ANSWERED",
+      "expectedTopic": "sinuca-total-parcial",
+      "expectedSourceClassifications": ["OFFICIAL_RULE"],
+      "expectedLogicalSources": ["CBBS Regras da Sinuca 2012"],
+      "requireOfficialEvidence": true,
+      "requireImplementationEvidence": false
+    },
+    {
+      "id": "brazilian-called-shot",
+      "question": "Quando uma bola precisa ser cantada na Sinuca brasileira?",
+      "language": "pt-BR",
+      "expectedStatus": "ANSWERED",
+      "expectedTopic": "identificacao-jogada",
+      "expectedSourceClassifications": ["OFFICIAL_RULE"],
+      "expectedLogicalSources": ["CBBS Regras da Sinuca 2012"],
+      "requireOfficialEvidence": true,
+      "requireImplementationEvidence": false
+    },
+    {
+      "id": "brazilian-spot-obstruction",
+      "question": "Onde uma bola deve ser recolocada quando sua marca está ocupada?",
+      "language": "pt-BR",
+      "expectedStatus": "ANSWERED",
+      "expectedTopic": "reposicao-bolas",
+      "expectedSourceClassifications": ["OFFICIAL_RULE"],
+      "expectedLogicalSources": ["CBBS Regras da Sinuca 2012"],
+      "requireOfficialEvidence": true,
+      "requireImplementationEvidence": false
+    },
+    {
+      "id": "brazilian-end-frame",
+      "question": "Quais condições encerram uma partida de Sinuca brasileira?",
+      "language": "pt-BR",
+      "expectedStatus": "ANSWERED",
+      "expectedTopic": "encerramento-partida",
+      "expectedSourceClassifications": ["OFFICIAL_RULE"],
+      "expectedLogicalSources": ["CBBS Regras da Sinuca 2012"],
+      "requireOfficialEvidence": true,
+      "requireImplementationEvidence": false
+    },
+    {
+      "id": "brazilian-final-premium-review",
+      "question": "Como o Salloon trata a oportunidade Premium depois da preta definitiva e isso já foi reconciliado com a regra CBBS?",
+      "language": "pt-BR",
+      "expectedStatus": "ANSWERED",
+      "expectedTopic": "premium-final-review",
+      "expectedSourceClassifications": ["IMPLEMENTATION_NOTE"],
+      "expectedLogicalSources": ["Salloon Score Brazilian sinuca implementation notes"],
+      "requireOfficialEvidence": false,
+      "requireImplementationEvidence": true
+    },
+    {
+      "id": "brazilian-geometry-limit",
+      "question": "O Salloon calcula pela geometria da mesa se existe sinuca total?",
+      "language": "pt-BR",
+      "expectedStatus": "ANSWERED",
+      "expectedTopic": "limite-geometria",
+      "expectedSourceClassifications": ["IMPLEMENTATION_NOTE"],
+      "expectedLogicalSources": ["Salloon Score Brazilian sinuca implementation notes"],
+      "requireOfficialEvidence": false,
+      "requireImplementationEvidence": true
+    }
+  ]
+}

@@ -1,0 +1,21 @@
+{
+  "schemaVersion": "jumarag.source-manifest.v1",
+  "logicalName": "WPBSA Official Rules of Snooker and English Billiards 2024-25",
+  "governingBody": "World Professional Billiards and Snooker Association Limited",
+  "landingPage": "https://www.wpbsa.com/rules/",
+  "canonicalUrl": "https://wpbsa.com/wp-content/uploads/2198_WPBSA-Rulebook-2024-25.pdf",
+  "documentTitle": "Official Rules of the Games of Snooker and English Billiards",
+  "edition": "2024-25",
+  "revision": "September 2024",
+  "publicationDate": "2024-09",
+  "retrievedAt": "2026-10-31",
+  "sourceClassification": "OFFICIAL_RULE",
+  "language": "en",
+  "mediaType": "application/pdf",
+  "artifactFileName": "wpbsa-rulebook-2024-25.pdf",
+  "artifactByteSize": 3274488,
+  "sha256": "108d490e6415a6a449f3edc8c52f47c562cfd6703242a2304f4a489241564bbe",
+  "localPreparedFile": ".local/knowledge-sources/snooker/wpbsa-rulebook-2024-25.prepared.md",
+  "rights": "Copyright WPBSA. Local retrieval-grounding use only; source artifact and extracted text must not be committed or redistributed.",
+  "notes": "The official rules landing page identified this download as the current rulebook when verified on 2026-10-31. The landing page says the current version was released in September 2024 and is the canonical place for later updates."
+}

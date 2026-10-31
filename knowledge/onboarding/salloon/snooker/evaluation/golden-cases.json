@@ -1,0 +1,182 @@
+{
+  "schemaVersion": "jumarag.golden-cases.v1",
+  "knowledgeBaseSlug": "salloon-snooker-rules",
+  "cases": [
+    {
+      "id": "snooker-free-ball-entitlement",
+      "question": "When is a Free Ball available after a foul?",
+      "language": "en",
+      "expectedStatus": "ANSWERED",
+      "expectedTopic": "free-ball",
+      "expectedSourceClassifications": ["OFFICIAL_RULE"],
+      "expectedLogicalSources": ["WPBSA Official Rules of Snooker and English Billiards 2024-25"],
+      "requireOfficialEvidence": true,
+      "requireImplementationEvidence": false
+    },
+    {
+      "id": "snooker-free-ball-salloon",
+      "question": "How does Salloon record and score a Free Ball?",
+      "language": "en",
+      "expectedStatus": "ANSWERED",
+      "expectedTopic": "free-ball-implementation",
+      "expectedSourceClassifications": ["IMPLEMENTATION_NOTE"],
+      "expectedLogicalSources": ["Salloon Score Snooker implementation notes"],
+      "requireOfficialEvidence": false,
+      "requireImplementationEvidence": true
+    },
+    {
+      "id": "snooker-foul-penalty",
+      "question": "How many points are awarded for a foul in Snooker?",
+      "language": "en",
+      "expectedStatus": "ANSWERED",
+      "expectedTopic": "foul-penalty",
+      "expectedSourceClassifications": ["OFFICIAL_RULE"],
+      "expectedLogicalSources": ["WPBSA Official Rules of Snooker and English Billiards 2024-25"],
+      "requireOfficialEvidence": true,
+      "requireImplementationEvidence": false
+    },
+    {
+      "id": "snooker-foul-and-miss-return",
+      "question": "What happens when a Foul and a Miss position is restored?",
+      "language": "en",
+      "expectedStatus": "ANSWERED",
+      "expectedTopic": "foul-and-miss",
+      "expectedSourceClassifications": ["OFFICIAL_RULE"],
+      "expectedLogicalSources": ["WPBSA Official Rules of Snooker and English Billiards 2024-25"],
+      "requireOfficialEvidence": true,
+      "requireImplementationEvidence": false
+    },
+    {
+      "id": "snooker-traditional-repeated-miss",
+      "question": "When can repeated Foul and a Miss calls lead to a frame award in Traditional Snooker, and how does Salloon record it?",
+      "language": "en",
+      "expectedStatus": "ANSWERED",
+      "expectedTopic": "traditional-repeated-miss",
+      "expectedSourceClassifications": ["OFFICIAL_RULE", "IMPLEMENTATION_NOTE"],
+      "expectedLogicalSources": ["WPBSA Official Rules of Snooker and English Billiards 2024-25", "Salloon Score Snooker implementation notes"],
+      "requireOfficialEvidence": true,
+      "requireImplementationEvidence": true
+    },
+    {
+      "id": "snooker-six-red-miss-limit",
+      "question": "What warning and options apply after repeated Misses in Six Reds?",
+      "language": "en",
+      "expectedStatus": "ANSWERED",
+      "expectedTopic": "six-red-miss-limit",
+      "expectedSourceClassifications": ["OFFICIAL_RULE", "IMPLEMENTATION_NOTE"],
+      "expectedLogicalSources": ["WPBSA Official Rules of Snooker and English Billiards 2024-25", "Salloon Score Snooker implementation notes"],
+      "requireOfficialEvidence": true,
+      "requireImplementationEvidence": true
+    },
+    {
+      "id": "snooker-respotted-black",
+      "question": "How is a tied frame decided with a respotted Black?",
+      "language": "en",
+      "expectedStatus": "ANSWERED",
+      "expectedTopic": "respotted-black",
+      "expectedSourceClassifications": ["OFFICIAL_RULE"],
+      "expectedLogicalSources": ["WPBSA Official Rules of Snooker and English Billiards 2024-25"],
+      "requireOfficialEvidence": true,
+      "requireImplementationEvidence": false
+    },
+    {
+      "id": "snooker-red-colour-sequence",
+      "question": "What ball is on after a Red is potted, and what happens after the last Red?",
+      "language": "en",
+      "expectedStatus": "ANSWERED",
+      "expectedTopic": "ball-on-progression",
+      "expectedSourceClassifications": ["OFFICIAL_RULE"],
+      "expectedLogicalSources": ["WPBSA Official Rules of Snooker and English Billiards 2024-25"],
+      "requireOfficialEvidence": true,
+      "requireImplementationEvidence": false
+    },
+    {
+      "id": "snooker-final-colours",
+      "question": "In which order are the Colours played after the Reds are gone?",
+      "language": "en",
+      "expectedStatus": "ANSWERED",
+      "expectedTopic": "final-colours",
+      "expectedSourceClassifications": ["OFFICIAL_RULE"],
+      "expectedLogicalSources": ["WPBSA Official Rules of Snooker and English Billiards 2024-25"],
+      "requireOfficialEvidence": true,
+      "requireImplementationEvidence": false
+    },
+    {
+      "id": "snooker-concession-official",
+      "question": "What restrictions apply to conceding a frame under the official rules?",
+      "language": "en",
+      "expectedStatus": "ANSWERED",
+      "expectedTopic": "concession",
+      "expectedSourceClassifications": ["OFFICIAL_RULE"],
+      "expectedLogicalSources": ["WPBSA Official Rules of Snooker and English Billiards 2024-25"],
+      "requireOfficialEvidence": true,
+      "requireImplementationEvidence": false
+    },
+    {
+      "id": "snooker-concession-difference",
+      "question": "Does Salloon apply every official restriction before a player can concede a Snooker frame?",
+      "language": "en",
+      "expectedStatus": "ANSWERED",
+      "expectedTopic": "concession-difference",
+      "expectedSourceClassifications": ["OFFICIAL_RULE", "IMPLEMENTATION_NOTE"],
+      "expectedLogicalSources": ["WPBSA Official Rules of Snooker and English Billiards 2024-25", "Salloon Score Snooker implementation notes"],
+      "requireOfficialEvidence": true,
+      "requireImplementationEvidence": true
+    },
+    {
+      "id": "snooker-club-reduced",
+      "question": "Is Salloon's three-Red reduced profile the official Six Reds game?",
+      "language": "en",
+      "expectedStatus": "ANSWERED",
+      "expectedTopic": "profile-difference",
+      "expectedSourceClassifications": ["IMPLEMENTATION_NOTE"],
+      "expectedLogicalSources": ["Salloon Score Snooker implementation notes"],
+      "requireOfficialEvidence": false,
+      "requireImplementationEvidence": true
+    },
+    {
+      "id": "snooker-touching-ball-limit",
+      "question": "Can Salloon determine a Touching Ball situation from table geometry?",
+      "language": "en",
+      "expectedStatus": "ANSWERED",
+      "expectedTopic": "implementation-limit",
+      "expectedSourceClassifications": ["IMPLEMENTATION_NOTE"],
+      "expectedLogicalSources": ["Salloon Score Snooker implementation notes"],
+      "requireOfficialEvidence": false,
+      "requireImplementationEvidence": true
+    },
+    {
+      "id": "snooker-six-red-break",
+      "question": "What is the conventional maximum clearance in Six Reds before any Free Ball?",
+      "language": "en",
+      "expectedStatus": "ANSWERED",
+      "expectedTopic": "six-red-scoring",
+      "expectedSourceClassifications": ["IMPLEMENTATION_NOTE"],
+      "expectedLogicalSources": ["Salloon Score Snooker implementation notes"],
+      "requireOfficialEvidence": false,
+      "requireImplementationEvidence": true
+    },
+    {
+      "id": "snooker-unreachable-lead-difference",
+      "question": "Does Salloon automatically end a Snooker frame when the lead becomes unreachable?",
+      "language": "en",
+      "expectedStatus": "ANSWERED",
+      "expectedTopic": "completion-difference",
+      "expectedSourceClassifications": ["IMPLEMENTATION_NOTE"],
+      "expectedLogicalSources": ["Salloon Score Snooker implementation notes"],
+      "requireOfficialEvidence": false,
+      "requireImplementationEvidence": true
+    },
+    {
+      "id": "snooker-unsupported-table-angle",
+      "question": "What exact cushion angle should this player use for the next shot?",
+      "language": "en",
+      "expectedStatus": "INSUFFICIENT_EVIDENCE",
+      "expectedTopic": "unsupported-geometry-advice",
+      "expectedSourceClassifications": [],
+      "expectedLogicalSources": [],
+      "requireOfficialEvidence": false,
+      "requireImplementationEvidence": false
+    }
+  ]
+}

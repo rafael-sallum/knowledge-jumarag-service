@@ -1,0 +1,107 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://rag.salloonscore.com/schemas/salloon.match-context.v1.json",
+  "title": "Salloon Match Context v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "rulesetFamily", "rulesetId", "matchStatus"],
+  "properties": {
+    "schemaVersion": { "const": "salloon.match-context.v1" },
+    "rulesetFamily": { "enum": ["BRAZILIAN", "SNOOKER"] },
+    "rulesetId": {
+      "enum": [
+        "brazilian-saloon-v1",
+        "legacy-brazilian-v1",
+        "snooker-wpbsa-2024-v1",
+        "snooker-six-red-wpbsa-2024-v1",
+        "snooker-club-reduced-v1"
+      ]
+    },
+    "profile": { "enum": ["BRAZILIAN_SALOON", "BRAZILIAN_LEGACY", "TRADITIONAL", "SIX_RED", "CLUB_REDUCED"] },
+    "matchStatus": { "enum": ["DRAFT", "IN_PROGRESS", "COMPLETED"] },
+    "matchFormat": { "type": "string", "maxLength": 32 },
+    "frame": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "status": { "enum": ["PENDING", "IN_PROGRESS", "COMPLETED"] },
+        "phase": { "type": "string", "maxLength": 64 },
+        "activePlayerSlot": { "$ref": "#/$defs/playerSlotOrNull" },
+        "startingPlayerSlot": { "$ref": "#/$defs/playerSlot" },
+        "scores": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "PLAYER_1": { "type": "integer" },
+            "PLAYER_2": { "type": "integer" }
+          },
+          "required": ["PLAYER_1", "PLAYER_2"]
+        },
+        "currentBreakScore": { "type": "integer", "minimum": 0 },
+        "ballOn": {
+          "type": ["object", "null"],
+          "additionalProperties": false,
+          "properties": {
+            "kind": { "enum": ["BRAZILIAN_NUMBER", "RED", "NOMINATED_COLOUR", "COLOUR"] },
+            "value": { "type": ["string", "integer", "null"] }
+          },
+          "required": ["kind"]
+        },
+        "redsRemaining": { "type": "integer", "minimum": 0, "maximum": 15 },
+        "coloursOnTable": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": { "enum": ["YELLOW", "GREEN", "BROWN", "BLUE", "PINK", "BLACK"] }
+        },
+        "availableBrazilianBalls": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": { "type": "integer", "minimum": 1, "maximum": 7 }
+        },
+        "removedBrazilianBalls": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": { "type": "integer", "minimum": 1, "maximum": 7 }
+        },
+        "riskyEligibleBalls": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": { "type": "integer", "minimum": 1, "maximum": 7 }
+        },
+        "premiumEligibleBalls": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": { "type": "integer", "minimum": 1, "maximum": 7 }
+        },
+        "cueBallPlacement": { "enum": ["IN_D", "ANYWHERE", null] },
+        "freeBall": {
+          "type": ["object", "null"],
+          "additionalProperties": false,
+          "properties": {
+            "status": { "enum": ["DECISION_PENDING", "AWARDED", "NOMINATED"] },
+            "trueBallOn": { "type": "string", "maxLength": 32 },
+            "nominee": { "type": ["string", "null"], "maxLength": 16 }
+          },
+          "required": ["status"]
+        },
+        "missSequence": {
+          "type": ["object", "null"],
+          "additionalProperties": false,
+          "properties": {
+            "policy": { "enum": ["OFFICIAL", "SIX_RED_OFFICIAL", "CLUB_LIMITED"] },
+            "status": { "type": "string", "maxLength": 48 },
+            "attemptNumber": { "type": "integer", "minimum": 1 },
+            "returnCount": { "type": "integer", "minimum": 0 },
+            "warningIssued": { "type": "boolean" },
+            "cueBallAnywhereAvailable": { "type": "boolean" }
+          },
+          "required": ["policy", "status"]
+        }
+      }
+    }
+  },
+  "$defs": {
+    "playerSlot": { "enum": ["PLAYER_1", "PLAYER_2"] },
+    "playerSlotOrNull": { "enum": ["PLAYER_1", "PLAYER_2", null] }
+  }
+}

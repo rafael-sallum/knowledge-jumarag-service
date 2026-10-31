@@ -1,0 +1,21 @@
+{
+  "schemaVersion": "jumarag.source-manifest.v1",
+  "logicalName": "CBBS Regras da Sinuca 2012",
+  "governingBody": "Confederação Brasileira de Bilhar e Sinuca",
+  "landingPage": "https://snookercbbs.com/regras/",
+  "canonicalUrl": "https://snookercbbs.com/wp-content/uploads/2014/08/RegrasdaSinuca20121.doc",
+  "documentTitle": "Sinuca",
+  "edition": "2012",
+  "revision": "Consolidação aprovada em Assembleia de 10.11.2012",
+  "publicationDate": "2012-11-10",
+  "retrievedAt": "2026-10-31",
+  "sourceClassification": "OFFICIAL_RULE",
+  "language": "pt-BR",
+  "mediaType": "application/msword",
+  "artifactFileName": "cbbs-regras-sinuca-2012.doc",
+  "artifactByteSize": 443904,
+  "sha256": "446dfc030433e1b606eb13f940ebe879313070702616082d5f60aebf97ee1bb5",
+  "localPreparedFile": ".local/knowledge-sources/brazilian/cbbs-regras-sinuca-2012.prepared.md",
+  "rights": "Official CBBS third-party material. Local retrieval-grounding use only; source artifact and extracted text must not be committed or redistributed.",
+  "notes": "The CBBS rules landing page still linked this document as the official Sinuca rules when verified on 2026-10-31. The file itself states that the general billiards regulation complements it."
+}
