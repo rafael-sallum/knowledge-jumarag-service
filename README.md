@@ -122,8 +122,8 @@ The response exposes the Knowledge Base, snapshot, retrieval profile, embedding 
 
 1. resolves the active or requested published snapshot;
 2. resolves the Knowledge Base context strategy;
-3. prepares bounded evidence without crossing snapshot/source/language boundaries;
-4. evaluates evidence sufficiency and explicit conflicts deterministically;
+3. validates the allowlisted evidence intent and prepares bounded evidence without crossing snapshot/source/language boundaries;
+4. evaluates relevance, required source-class diversity, and explicit conflicts deterministically;
 5. gives only prepared evidence and allowed citation IDs to `ChatGateway` when the local evidence policy returns `ANSWERED`;
 6. validates every generated citation before returning it.
 
@@ -133,6 +133,7 @@ curl -sS -X POST "$API_ROOT/v1/knowledge-bases/snooker-rules/ask" \
   -d '{
     "question":"When can a free ball be nominated?",
     "language":"en",
+    "evidenceIntent":"OFFICIAL_ONLY",
     "contextSchema":"example.match-context.v1",
     "context":{"ruleset":"SNOOKER","profile":"SIX_RED"}
   }'
@@ -145,6 +146,17 @@ Answer states:
 - `CONFLICTING_SOURCES`: relevant sources carry the same `assertionKey` with different `assertionValue` metadata; all conflicting evidence is surfaced.
 
 Conflict metadata is a deliberately modest Phase 2 seam, not semantic contradiction detection. Source classification remains visible and no lower-authority source is silently discarded.
+
+### Evidence intent and diversity
+
+`evidenceIntent` is an optional, allowlisted request field. Its default is `GENERAL`, preserving the pre-Phase-4C selection behavior. It is an explicit backend choice rather than an LLM classification or arbitrary source filter:
+
+- `GENERAL`: current relevance-driven selection;
+- `OFFICIAL_ONLY`: only `OFFICIAL_RULE` evidence is eligible;
+- `IMPLEMENTATION_ONLY`: only `IMPLEMENTATION_NOTE` evidence is eligible;
+- `OFFICIAL_AND_IMPLEMENTATION`: at least one relevant item and one validated citation from each class are required.
+
+Comparative RAG embeds the question once, searches each required class with that same vector, and interleaves the results so one class cannot consume the context. LONG_CONTEXT filters and validates the bounded snapshot corpus; HYBRID requires diverse anchors before neighbor expansion; AUTO retains its normal strategy decision but cannot bypass diversity. Missing either comparative side returns `INSUFFICIENT_EVIDENCE` without a chat call. The response exposes `evidenceIntent`, `requiredEvidenceClasses`, `presentEvidenceClasses`, and `evidenceDiversitySatisfied`. Unknown intent values and unknown `/ask` fields are rejected; clients cannot request raw source classes, strategy, provider, or model.
 
 ## Context strategies
 
@@ -197,12 +209,12 @@ JUMARAG_CHAT_PROVIDER=openai
 JUMARAG_DEFAULT_EMBEDDING_PROFILE=openai-text-embedding-3-small-1536
 JUMARAG_RETRIEVAL_EMBEDDING_PROFILE=openai-text-embedding-3-small-1536
 JUMARAG_OPENAI_EMBEDDING_MODEL=text-embedding-3-small
-JUMARAG_OPENAI_CHAT_MODEL=gpt-4.1-mini
+JUMARAG_OPENAI_CHAT_MODEL=gpt-6-luna
 ```
 
 The fake and OpenAI vectors are different vector spaces even though both have 1,536 dimensions. The persisted profiles are distinct, ingestion and retrieval resolve an exact profile, and the SQL query joins by that profile ID. They are never compared together. A snapshot fixes source versions; an embedding profile fixes their vector representation. Those concepts remain independent.
 
-The OpenAI profile is `OPENAI / text-embedding-3-small / 1536 / COSINE`. The adapter requests 1,536 dimensions explicitly and rejects any incompatible response. `gpt-4.1-mini` is the cost-conscious development chat default, but the model remains runtime-configurable.
+The OpenAI profile is `OPENAI / text-embedding-3-small / 1536 / COSINE`. The adapter requests 1,536 dimensions explicitly and rejects any incompatible response. `gpt-6-luna` is the supported cost-efficient development chat default for short grounded answers and remains runtime-configurable. It is invoked with reasoning effort `none`, strict structured output, and bounded completion tokens. Model support and current pricing were verified against the official [GPT-6 Luna model page](https://developers.openai.com/api/docs/models/gpt-6-luna) and [OpenAI API pricing](https://developers.openai.com/api/docs/pricing) on 2026-10-31; operators must re-verify before production rollout.
 
 Spring AI 1.1.8 provides a clean Chat Completions integration with strict JSON Schema output, which Phase 3 uses behind `ChatGateway`. Its OpenAI adapter does not expose the Responses API cleanly enough for this contract without bypassing Spring AI; a future adapter can adopt Responses without changing the core port.
 
@@ -288,7 +300,7 @@ Salloon Score is the first real domain onboarded through controlled content rath
 
 Authoritative third-party documents are not committed. Reviewed manifests contain canonical URLs, edition/revision, retrieval date and SHA-256. A controlled preparation script extracts locally acquired artifacts into ignored `.local/knowledge-sources`; the existing TEXT/Markdown ingestion API then creates immutable source versions and embeddings. First-party implementation notes cite the read-only Salloon engine/tests and label matches, specializations, simplifications, differences and unresolved reviews explicitly.
 
-The onboarding package includes 30 evidence-oriented golden questions, an idempotent bootstrap, a bounded strategy-comparison script, `salloon.match-context.v1`, and the future backend-to-backend contract. See [the onboarding guide](knowledge/onboarding/salloon/README.md). Live Salloon API/frontend integration remains deferred.
+The onboarding package includes 30 evidence-oriented golden questions with explicit evidence intents, an idempotent bootstrap, a bounded strategy-comparison script, `salloon.match-context.v1`, the planned `Salloon Score Backend` client profile, and the future backend-to-backend contract. Comparative official-versus-implementation questions cannot be reported as grounded unless both sides are present and cited. See [the onboarding guide](knowledge/onboarding/salloon/README.md). Live Salloon API/frontend integration remains deferred.
 
 ## Current limitations
 
@@ -314,3 +326,4 @@ Deferred: Salloon integration, Ollama/Gemini/Anthropic/Azure, Responses API migr
 - [ADR-014](docs/adr/ADR-014-provider-resilience-and-cost-guards.md): failure isolation and bounded cost
 - [ADR-015](docs/adr/ADR-015-context-strategy-orchestration.md): provider-neutral context strategy orchestration
 - [ADR-016](docs/adr/ADR-016-salloon-knowledge-onboarding.md): controlled Salloon knowledge onboarding
+- [ADR-017](docs/adr/ADR-017-evidence-intent-and-diversity.md): explicit evidence intent and source-class diversity

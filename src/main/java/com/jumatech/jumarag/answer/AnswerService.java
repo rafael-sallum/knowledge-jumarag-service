@@ -6,6 +6,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.jumatech.jumarag.context.ContextPreparationRequest;
 import com.jumatech.jumarag.context.ContextPreparationService;
 import com.jumatech.jumarag.context.PreparedContext;
+import com.jumatech.jumarag.evidence.EvidenceIntent;
 import com.jumatech.jumarag.knowledgebase.KnowledgeBaseService;
 import com.jumatech.jumarag.provider.ProviderException;
 import com.jumatech.jumarag.retrieval.RetrievalHit;
@@ -69,11 +70,12 @@ public final class AnswerService {
                 ? knowledgeBase.defaultLocale()
                 : Locale.forLanguageTag(request.language()).toLanguageTag();
         KnowledgeBaseService.validateLocale(language);
+        EvidenceIntent evidenceIntent = EvidenceIntent.defaulted(request.evidenceIntent());
 
         var snapshot = snapshots.resolveForClient(knowledgeBase.id(), request.snapshotId());
         PreparedContext context = contexts.prepare(new ContextPreparationRequest(
-                knowledgeBase, snapshot, request.question().strip(), language));
-        EvidencePolicy.Assessment assessment = evidencePolicy.assess(request.question(), context);
+                knowledgeBase, snapshot, request.question().strip(), language, evidenceIntent));
+        EvidencePolicy.Assessment assessment = evidencePolicy.assess(request.question(), context, evidenceIntent);
         List<RetrievalHit> selectedEvidence = assessment.evidence();
         List<Citation> available = citations(knowledgeBase.id(), context.snapshotId(), selectedEvidence);
         Map<String, Citation> citationsById = new LinkedHashMap<>();
@@ -97,9 +99,12 @@ public final class AnswerService {
                         request.contextSchema(),
                         request.context(),
                         assessment.status(),
+                        evidenceIntent,
+                        assessment.requiredEvidenceClasses(),
                         gatewayEvidence));
                 citedIds = citationValidator.validate(
-                        generated.citationIds(), citationsById.keySet(), assessment.status());
+                        generated.citationIds(), citationClassifications(citationsById), assessment.status(),
+                        assessment.requiredEvidenceClasses());
             } catch (ProviderException exception) {
                 throw new DomainException(
                         "AI_PROVIDER_UNAVAILABLE",
@@ -113,7 +118,8 @@ public final class AnswerService {
             }
         } else {
             citedIds = citationValidator.validate(
-                    generated.citationIds(), citationsById.keySet(), assessment.status());
+                    generated.citationIds(), citationClassifications(citationsById), assessment.status(),
+                    assessment.requiredEvidenceClasses());
         }
         List<Citation> cited = citedIds.stream().map(citationsById::get).toList();
         metrics.counter("jumarag.answer.completed", "status", assessment.status().name(),
@@ -135,6 +141,10 @@ public final class AnswerService {
                 context.characterCount(),
                 context.estimatedTokens(),
                 context.completeSnapshot(),
+                evidenceIntent,
+                assessment.requiredEvidenceClasses(),
+                assessment.presentEvidenceClasses(),
+                assessment.evidenceDiversitySatisfied(),
                 cited,
                 generated.usage(),
                 MDC.get(RequestCorrelationFilter.REQUEST_ID));
@@ -151,6 +161,12 @@ public final class AnswerService {
                     "The controlled sources contain conflicting assertions; review the cited evidence.",
                     evidence.stream().map(ChatGateway.Evidence::citationId).toList());
         };
+    }
+
+    private static Map<String, String> citationClassifications(Map<String, Citation> citationsById) {
+        Map<String, String> result = new LinkedHashMap<>();
+        citationsById.forEach((id, citation) -> result.put(id, citation.sourceClassification()));
+        return Map.copyOf(result);
     }
 
     private void validate(AnswerRequest request) {
@@ -215,7 +231,14 @@ public final class AnswerService {
             String language,
             String contextSchema,
             JsonNode context,
-            UUID snapshotId) {}
+            UUID snapshotId,
+            EvidenceIntent evidenceIntent) {
+
+        public AnswerRequest(
+                String question, String language, String contextSchema, JsonNode context, UUID snapshotId) {
+            this(question, language, contextSchema, context, snapshotId, EvidenceIntent.GENERAL);
+        }
+    }
 
     public record AnswerResponse(
             AnswerStatus status,
@@ -234,6 +257,10 @@ public final class AnswerService {
             int contextCharacterCount,
             int contextEstimatedTokens,
             boolean contextCompleteSnapshot,
+            EvidenceIntent evidenceIntent,
+            java.util.Set<String> requiredEvidenceClasses,
+            java.util.Set<String> presentEvidenceClasses,
+            boolean evidenceDiversitySatisfied,
             List<Citation> citations,
             ChatGateway.Usage providerUsage,
             String requestId) {}

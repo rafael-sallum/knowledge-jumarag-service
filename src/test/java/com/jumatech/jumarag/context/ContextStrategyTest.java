@@ -9,6 +9,7 @@ import static org.mockito.Mockito.when;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.jumatech.jumarag.answer.AnswerProperties;
+import com.jumatech.jumarag.evidence.EvidenceClassificationPolicy;
 import com.jumatech.jumarag.knowledgebase.KnowledgeBase;
 import com.jumatech.jumarag.retrieval.RetrievalHit;
 import com.jumatech.jumarag.retrieval.RetrievalService;
@@ -28,23 +29,24 @@ class ContextStrategyTest {
     void ragEmbedsAndRetrievesExactlyOnce() {
         RetrievalService retrieval = mock(RetrievalService.class);
         ContextPreparationRequest request = request(ContextStrategyType.RAG);
-        when(retrieval.searchWithinSnapshot(any(), any(), any(), any(), any(), any(Integer.class)))
+        when(retrieval.searchWithinSnapshot(any(), any(), any(), any(), any(), any(), any(Integer.class)))
                 .thenReturn(result(List.of(hit(0, 0.9))));
 
         PreparedContext prepared = new RagContextStrategy(retrieval, properties, answerProperties).prepare(request);
 
         assertThat(prepared.usedStrategy()).isEqualTo(ContextStrategyType.RAG);
-        verify(retrieval).searchWithinSnapshot(any(), any(), any(), any(), any(), any(Integer.class));
+        verify(retrieval).searchWithinSnapshot(any(), any(), any(), any(), any(), any(), any(Integer.class));
     }
 
     @Test
     void longContextNeverTouchesRetrievalAndRequiresWholeSnapshotToFit() {
         ContextRepository repository = mock(ContextRepository.class);
         ContextPreparationRequest request = request(ContextStrategyType.LONG_CONTEXT);
-        when(repository.stats(any(), any(), any())).thenReturn(new ContextRepository.SnapshotStats(1, 120));
-        when(repository.findSnapshotChunks(any(), any(), any())).thenReturn(List.of(hit(0, 0)));
+        when(repository.stats(any(), any(), any(), any())).thenReturn(new ContextRepository.SnapshotStats(1, 120));
+        when(repository.findSnapshotChunks(any(), any(), any(), any())).thenReturn(List.of(hit(0, 0)));
 
-        PreparedContext prepared = new LongContextStrategy(repository, properties).prepare(request);
+        PreparedContext prepared = new LongContextStrategy(
+                repository, properties, new EvidenceClassificationPolicy()).prepare(request);
 
         assertThat(prepared.usedStrategy()).isEqualTo(ContextStrategyType.LONG_CONTEXT);
         assertThat(prepared.embeddingProfile()).isNull();
@@ -56,19 +58,20 @@ class ContextStrategyTest {
         ContextRepository repository = mock(ContextRepository.class);
         RetrievalService retrieval = mock(RetrievalService.class);
         ContextPreparationRequest request = request(ContextStrategyType.AUTO);
-        when(repository.stats(any(), any(), any())).thenReturn(new ContextRepository.SnapshotStats(20, 20_000));
-        when(retrieval.searchWithinSnapshot(any(), any(), any(), any(), any(), any(Integer.class)))
+        when(repository.stats(any(), any(), any(), any())).thenReturn(new ContextRepository.SnapshotStats(20, 20_000));
+        when(retrieval.searchWithinSnapshot(any(), any(), any(), any(), any(), any(), any(Integer.class)))
                 .thenReturn(result(List.of(hit(4, 0.95))));
         RagContextStrategy rag = new RagContextStrategy(retrieval, properties, answerProperties);
-        LongContextStrategy longContext = new LongContextStrategy(repository, properties);
+        var evidenceClassifications = new EvidenceClassificationPolicy();
+        LongContextStrategy longContext = new LongContextStrategy(repository, properties, evidenceClassifications);
         HybridContextStrategy hybrid = new HybridContextStrategy(rag, repository, properties);
 
         PreparedContext prepared = new AutoContextStrategy(
-                repository, longContext, rag, hybrid, properties).prepare(request);
+                repository, longContext, rag, hybrid, properties, evidenceClassifications).prepare(request);
 
         assertThat(prepared.usedStrategy()).isEqualTo(ContextStrategyType.RAG);
         assertThat(prepared.decisionReason()).isEqualTo(ContextDecisionReason.STRONG_RETRIEVAL_SIGNAL);
-        verify(retrieval).searchWithinSnapshot(any(), any(), any(), any(), any(), any(Integer.class));
+        verify(retrieval).searchWithinSnapshot(any(), any(), any(), any(), any(), any(), any(Integer.class));
         verify(repository, never()).findNeighbors(any(), any(), any(), any(), any(Integer.class));
     }
 

@@ -6,6 +6,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.jumatech.jumarag.answer.AnswerService;
 import com.jumatech.jumarag.answer.AnswerStatus;
 import com.jumatech.jumarag.context.ContextStrategyType;
+import com.jumatech.jumarag.evidence.EvidenceIntent;
 import com.jumatech.jumarag.evaluation.GoldenEvaluationHarness;
 import com.jumatech.jumarag.ingestion.IngestionService;
 import com.jumatech.jumarag.knowledgebase.KnowledgeBase;
@@ -94,12 +95,17 @@ class SalloonOnboardingIntegrationTest {
                     new AnswerService.AnswerRequest("How does Salloon record a Free Ball after a foul?", "en",
                             "salloon.match-context.v1", objectMapper.createObjectNode()
                                     .put("rulesetFamily", "SNOOKER").put("rulesetId", "snooker-wpbsa-2024-v1"),
-                            null));
+                            null, EvidenceIntent.OFFICIAL_AND_IMPLEMENTATION));
             evaluations.add(harness.evaluate(new GoldenEvaluationHarness.GoldenCase(
                     "How does Salloon record a Free Ball after a foul?",
-                    "Salloon Score Snooker implementation notes", null, AnswerStatus.ANSWERED), answer, 0));
+                    "Salloon Score Snooker implementation notes", null, AnswerStatus.ANSWERED,
+                    EvidenceIntent.OFFICIAL_AND_IMPLEMENTATION), answer, 0));
             assertThat(answer.snapshotId()).isEqualTo(snapshot.id());
-            assertThat(answer.citations()).isNotEmpty();
+            assertThat(answer.evidenceDiversitySatisfied()).isTrue();
+            assertThat(answer.presentEvidenceClasses())
+                    .contains("OFFICIAL_RULE", "IMPLEMENTATION_NOTE");
+            assertThat(answer.citations()).extracting(AnswerService.Citation::sourceClassification)
+                    .contains("OFFICIAL_RULE", "IMPLEMENTATION_NOTE");
         }
         assertThat(evaluations).allMatch(GoldenEvaluationHarness.Evaluation::passed);
         assertThat(harness.summarize(evaluations).configuredStrategies())

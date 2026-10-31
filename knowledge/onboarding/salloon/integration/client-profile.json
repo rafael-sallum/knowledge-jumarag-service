@@ -1,0 +1,11 @@
+{
+  "schemaVersion": "jumarag.planned-client.v1",
+  "name": "Salloon Score Backend",
+  "status": "PLANNED",
+  "credentialProvisioned": false,
+  "grants": [
+    {"knowledgeBaseSlug": "salloon-snooker-rules", "permission": "ASK"},
+    {"knowledgeBaseSlug": "salloon-brazilian-rules", "permission": "ASK"}
+  ],
+  "notes": "Create a revocable production credential only during deployment; never expose it to the PWA."
+}

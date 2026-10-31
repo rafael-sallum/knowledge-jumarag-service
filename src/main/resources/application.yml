@@ -16,6 +16,8 @@ spring:
     enabled: ${APP_MIGRATIONS_ENABLED:false}
   jackson:
     default-property-inclusion: non_null
+    deserialization:
+      fail-on-unknown-properties: true
 
 app:
   runtime: ${APP_RUNTIME:api}
@@ -61,7 +63,7 @@ app:
       base-url: ${JUMARAG_OPENAI_BASE_URL:https://api.openai.com}
       embedding-model: ${JUMARAG_OPENAI_EMBEDDING_MODEL:text-embedding-3-small}
       embedding-dimensions: ${JUMARAG_OPENAI_EMBEDDING_DIMENSIONS:1536}
-      chat-model: ${JUMARAG_OPENAI_CHAT_MODEL:gpt-4.1-mini}
+      chat-model: ${JUMARAG_OPENAI_CHAT_MODEL:gpt-6-luna}
       timeout: ${JUMARAG_OPENAI_TIMEOUT_SECONDS:20}s
       max-output-tokens: ${JUMARAG_OPENAI_MAX_OUTPUT_TOKENS:256}
     resilience:

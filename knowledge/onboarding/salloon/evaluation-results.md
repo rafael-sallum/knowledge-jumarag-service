@@ -39,11 +39,40 @@ All six answers were `ANSWERED`, used only valid supplied citation IDs, and rema
 
 The model page now marks `gpt-4.1-mini` deprecated. This does not invalidate the bounded calibration, but production onboarding must select and re-evaluate a supported configurable chat model before deployment.
 
+## Phase 4C evidence-intent release gate
+
+Phase 4C keeps the Phase 4B rows above as the before-state. The Brazilian comparative question previously returned implementation-only evidence under RAG/HYBRID/AUTO. With explicit `OFFICIAL_AND_IMPLEMENTATION`, JumaRAG now reuses one query embedding, performs classification-bounded retrieval, and requires relevant evidence plus citations from both groups before generation.
+
+The deterministic Salloon-corpus smoke produced:
+
+| Case | Intent | Strategy used | Present/cited classes | Diversity | Status |
+| --- | --- | --- | --- | --- | --- |
+| Brazilian official | `OFFICIAL_ONLY` | RAG | official | true | ANSWERED |
+| Brazilian implementation | `IMPLEMENTATION_ONLY` | RAG | implementation | true | ANSWERED |
+| Brazilian comparison | `OFFICIAL_AND_IMPLEMENTATION` | RAG | official + implementation | true | ANSWERED |
+| Brazilian comparison | `OFFICIAL_AND_IMPLEMENTATION` | AUTO → RAG | official + implementation | true | ANSWERED |
+| Controlled comparison without official source | `OFFICIAL_AND_IMPLEMENTATION` | RAG | implementation only | false | INSUFFICIENT_EVIDENCE |
+
+The missing-side case made no chat call. Integration tests exercise the same comparative invariant through RAG, LONG_CONTEXT, HYBRID, and AUTO. All 30 golden cases now declare an allowlisted evidence intent.
+
+## Supported-model regression
+
+The development default moved to configurable `gpt-6-luna`, documented by OpenAI as its most efficient model for focused, high-volume tasks and supporting structured outputs. Four bounded real chat calls used the existing Salloon corpus and fake query embeddings; no paid embedding call or corpus re-embedding was needed for this regression.
+
+| Case | Intent | Chunks | Citation classes | Input/output tokens | Result |
+| --- | --- | ---: | --- | ---: | --- |
+| Snooker Free Ball official | `OFFICIAL_ONLY` | 6 | official | 2,631 / 96 | ANSWERED |
+| Snooker Free Ball in Salloon | `IMPLEMENTATION_ONLY` | 6 | implementation | 1,062 / 117 | ANSWERED |
+| Brazilian refusal official | `OFFICIAL_ONLY` | 2 | official | 2,697 / 105 | ANSWERED |
+| Brazilian refusal comparison | `OFFICIAL_AND_IMPLEMENTATION` | 2 | official + implementation | 1,644 / 99 | ANSWERED |
+
+Total measured chat usage was 8,034 input and 417 output tokens across four calls. At the standard short-context rates published on 2026-10-31 for `gpt-6-luna` ($0.10/M input, $0.50/M output), the estimated chat cost is approximately **US$0.00101**. This is an estimate from measured tokens and published rates, not an invoice. See the official [GPT-6 Luna model page](https://developers.openai.com/api/docs/models/gpt-6-luna) and [OpenAI API pricing](https://developers.openai.com/api/docs/pricing).
+
 ## Recommendation
 
 - Start `salloon-snooker-rules` with `AUTO`. On the representative comparison question it chose compact `RAG`, retained both official and implementation evidence, and used substantially less context than `HYBRID`.
-- Keep `salloon-brazilian-rules` on `AUTO` for development calibration, but do not onboard production comparison questions until source-classification coverage is enforced or improved. None of the three real runs cited the complementary official rule for the refusal/pass-back comparison. This is an evaluation gate, not a reason to fabricate an official citation.
+- Keep `salloon-brazilian-rules` on `AUTO`. The Phase 4C release gate now enforces and demonstrated official plus implementation evidence/citations for the refusal/pass-back comparison. Missing either side fails locally as insufficient evidence.
 - Keep the current AUTO threshold unchanged. It selected `RAG` for strong real retrieval signals and demonstrated the `HYBRID` branch in the deterministic sample without duplicate query embeddings.
 - Do not use `LONG_CONTEXT` for either initial corpus under the current conservative budget.
 
-Future onboarding should add an explicit official-versus-implementation evidence-diversity policy or query-intent filter before the Salloon backend exposes comparative answers. That belongs in the integration phase; Phase 4B does not alter generic retrieval semantics to fit one client.
+The next phase may integrate the Salloon backend behind its feature flag and trusted KB/intent routing. The PWA must never select arbitrary KBs, models, strategies, or source classes.

@@ -37,7 +37,7 @@ For real calibration, configure ingestion/retrieval as `openai-text-embedding-3-
 
 ## Golden evaluation
 
-The two evaluation files contain 30 evidence-oriented cases. They test official rules, Salloon behavior, explicit differences and unsupported geometry advice without requiring exact generated prose.
+The two evaluation files contain 30 evidence-oriented cases. They test official rules, Salloon behavior, explicit differences and unsupported geometry advice without requiring exact generated prose. Every case declares `evidenceIntent`: official questions use `OFFICIAL_ONLY`, product-behavior questions use `IMPLEMENTATION_ONLY`, comparative questions use `OFFICIAL_AND_IMPLEMENTATION`, and unsupported/general cases may use `GENERAL`.
 
 `compare-strategies.sh` runs a deliberately bounded subset across RAG, LONG_CONTEXT, HYBRID and AUTO and writes safe JSONL metrics under ignored `.local/knowledge-sources/evaluation`. Its default is four cases per KB; increase only deliberately.
 
@@ -51,11 +51,11 @@ ops/onboarding/salloon/compare-strategies.sh \
 
 The script changes the KB strategy during calibration. Use only an isolated development/staging database and restore the reviewed strategy afterward.
 
-The bounded Phase 4B results and initial per-KB recommendation are recorded in `evaluation-results.md`. In particular, the Brazilian official-versus-implementation comparison remains a documented evidence-coverage gate rather than being treated as production-ready.
+The bounded Phase 4B results and Phase 4C before/after release gate are recorded in `evaluation-results.md`. Comparative answers now require relevant evidence and valid citations from both classifications before generation; a missing side yields `INSUFFICIENT_EVIDENCE`.
 
 ## Future integration boundary
 
-The proposed `salloon.match-context.v1` is PII-free and seat-based. Only allowlisted ruleset/profile fields may become retrieval filters; sporting state remains untrusted answer context. See `context/field-mapping.md` and `integration/backend-contract.md`.
+The proposed `salloon.match-context.v1` is PII-free and seat-based. Only allowlisted ruleset/profile fields may become retrieval filters; sporting state remains untrusted answer context. The planned client is `Salloon Score Backend`, with `ASK` grants only for both Salloon KBs and no production credential stored here. See `context/field-mapping.md`, `integration/client-profile.json`, and `integration/backend-contract.md`.
 
 Salloon remains authoritative for scoring, legal transitions, control and persistence. JumaRAG failure must never block sporting operation.
 

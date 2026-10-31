@@ -52,9 +52,10 @@ public class OpenAiProviderConfiguration {
         OpenAiChatOptions options = OpenAiChatOptions.builder()
                 .model(openAi.chatModel())
                 .temperature(0.0)
-                .maxTokens(openAi.maxOutputTokens())
+                .maxCompletionTokens(openAi.maxOutputTokens())
                 .N(1)
                 .store(false)
+                .reasoningEffort("none")
                 .build();
         OpenAiChatModel model = OpenAiChatModel.builder()
                 .openAiApi(api(openAi))

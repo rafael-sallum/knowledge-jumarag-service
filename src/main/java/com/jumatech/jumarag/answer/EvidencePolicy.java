@@ -2,6 +2,8 @@ package com.jumatech.jumarag.answer;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.jumatech.jumarag.context.PreparedContext;
+import com.jumatech.jumarag.evidence.EvidenceClassificationPolicy;
+import com.jumatech.jumarag.evidence.EvidenceIntent;
 import com.jumatech.jumarag.retrieval.RetrievalHit;
 import java.text.Normalizer;
 import java.util.ArrayList;
@@ -13,72 +15,96 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 
 @Component
 public final class EvidencePolicy {
     private final AnswerProperties properties;
+    private final EvidenceClassificationPolicy classifications;
 
-    public EvidencePolicy(AnswerProperties properties) {
+    EvidencePolicy(AnswerProperties properties) {
+        this(properties, new EvidenceClassificationPolicy());
+    }
+
+    @Autowired
+    public EvidencePolicy(AnswerProperties properties, EvidenceClassificationPolicy classifications) {
         this.properties = properties;
+        this.classifications = classifications;
     }
 
     public Assessment assess(String question, PreparedContext context) {
+        return assess(question, context, EvidenceIntent.GENERAL);
+    }
+
+    public Assessment assess(String question, PreparedContext context, EvidenceIntent intent) {
         return switch (context.usedStrategy()) {
-            case RAG -> assessRag(question, context.evidence());
-            case LONG_CONTEXT -> assessLongContext(question, context.evidence());
-            case HYBRID -> assessHybrid(question, context);
+            case RAG -> assessRag(question, context.evidence(), intent);
+            case LONG_CONTEXT -> assessLongContext(question, context.evidence(), intent);
+            case HYBRID -> assessHybrid(question, context, intent);
             case AUTO -> throw new IllegalStateException("AUTO must resolve to a concrete context strategy.");
         };
     }
 
-    private Assessment assessRag(String question, List<RetrievalHit> candidates) {
+    private Assessment assessRag(String question, List<RetrievalHit> candidates, EvidenceIntent intent) {
         Set<String> queryTokens = tokens(question);
         List<RetrievalHit> usable = candidates.stream()
                 .filter(hit -> hit.similarity() >= properties.minimumSimilarity())
                 .filter(hit -> overlap(queryTokens, tokens(hit.text())) >= properties.minimumTokenOverlap())
                 .toList();
         if (usable.isEmpty()) {
-            return new Assessment(AnswerStatus.INSUFFICIENT_EVIDENCE, List.of());
+            return assessed(AnswerStatus.INSUFFICIENT_EVIDENCE, List.of(), intent);
+        }
+        if (!classifications.diversitySatisfied(intent, usable)) {
+            return assessed(AnswerStatus.INSUFFICIENT_EVIDENCE, usable, intent);
         }
         List<RetrievalHit> conflicts = conflicts(usable);
         if (!conflicts.isEmpty()) {
-            return new Assessment(AnswerStatus.CONFLICTING_SOURCES, conflicts);
+            return assessed(AnswerStatus.CONFLICTING_SOURCES, conflicts, intent);
         }
-        return new Assessment(AnswerStatus.ANSWERED, usable);
+        return assessed(AnswerStatus.ANSWERED, usable, intent);
     }
 
-    private Assessment assessLongContext(String question, List<RetrievalHit> evidence) {
+    private Assessment assessLongContext(String question, List<RetrievalHit> evidence, EvidenceIntent intent) {
         if (evidence.isEmpty()) {
-            return new Assessment(AnswerStatus.INSUFFICIENT_EVIDENCE, List.of());
+            return assessed(AnswerStatus.INSUFFICIENT_EVIDENCE, List.of(), intent);
         }
         Set<String> queryTokens = tokens(question);
         List<RetrievalHit> relevant = evidence.stream()
                 .filter(hit -> overlap(queryTokens, tokens(hit.text())) >= properties.minimumTokenOverlap())
                 .toList();
         if (relevant.isEmpty()) {
-            return new Assessment(AnswerStatus.INSUFFICIENT_EVIDENCE, List.of());
+            return assessed(AnswerStatus.INSUFFICIENT_EVIDENCE, List.of(), intent);
+        }
+        if (!classifications.diversitySatisfied(intent, relevant)) {
+            return assessed(AnswerStatus.INSUFFICIENT_EVIDENCE, relevant, intent);
         }
         List<RetrievalHit> conflicts = conflicts(relevant);
         if (!conflicts.isEmpty()) {
-            return new Assessment(AnswerStatus.CONFLICTING_SOURCES, conflicts);
+            return assessed(AnswerStatus.CONFLICTING_SOURCES, conflicts, intent);
         }
-        return new Assessment(AnswerStatus.ANSWERED, evidence);
+        return assessed(AnswerStatus.ANSWERED, evidence, intent);
     }
 
-    private Assessment assessHybrid(String question, PreparedContext context) {
+    private Assessment assessHybrid(String question, PreparedContext context, EvidenceIntent intent) {
         List<RetrievalHit> anchors = context.evidence().stream()
                 .filter(hit -> context.relevanceAnchorChunkIds().contains(hit.chunkId()))
                 .toList();
-        Assessment anchorAssessment = assessRag(question, anchors);
+        Assessment anchorAssessment = assessRag(question, anchors, intent);
         if (anchorAssessment.status() == AnswerStatus.INSUFFICIENT_EVIDENCE) {
             return anchorAssessment;
         }
         List<RetrievalHit> conflicts = conflicts(context.evidence());
         if (!conflicts.isEmpty()) {
-            return new Assessment(AnswerStatus.CONFLICTING_SOURCES, conflicts);
+            return assessed(AnswerStatus.CONFLICTING_SOURCES, conflicts, intent);
         }
-        return new Assessment(AnswerStatus.ANSWERED, context.evidence());
+        return assessed(AnswerStatus.ANSWERED, context.evidence(), intent);
+    }
+
+    private Assessment assessed(AnswerStatus status, List<RetrievalHit> evidence, EvidenceIntent intent) {
+        Set<String> required = classifications.requiredClassifications(intent);
+        Set<String> present = classifications.presentClassifications(evidence);
+        return new Assessment(status, evidence, required, present, present.containsAll(required));
     }
 
     private static List<RetrievalHit> conflicts(List<RetrievalHit> evidence) {
@@ -135,5 +161,24 @@ public final class EvidencePolicy {
         return tokens;
     }
 
-    public record Assessment(AnswerStatus status, List<RetrievalHit> evidence) {}
+    public record Assessment(
+            AnswerStatus status,
+            List<RetrievalHit> evidence,
+            Set<String> requiredEvidenceClasses,
+            Set<String> presentEvidenceClasses,
+            boolean evidenceDiversitySatisfied) {
+
+        public Assessment {
+            evidence = List.copyOf(evidence);
+            requiredEvidenceClasses = Set.copyOf(requiredEvidenceClasses);
+            presentEvidenceClasses = Set.copyOf(presentEvidenceClasses);
+        }
+
+        public Assessment(AnswerStatus status, List<RetrievalHit> evidence) {
+            this(status, evidence, Set.of(),
+                    evidence.stream().map(RetrievalHit::sourceClassification)
+                            .collect(java.util.stream.Collectors.toUnmodifiableSet()),
+                    true);
+        }
+    }
 }

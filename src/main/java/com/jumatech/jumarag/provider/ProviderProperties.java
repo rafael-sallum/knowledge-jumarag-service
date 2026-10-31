@@ -22,7 +22,7 @@ public record ProviderProperties(OpenAi openai, Resilience resilience) {
             baseUrl = blankToDefault(baseUrl, "https://api.openai.com");
             embeddingModel = blankToDefault(embeddingModel, "text-embedding-3-small");
             embeddingDimensions = embeddingDimensions == 0 ? 1536 : embeddingDimensions;
-            chatModel = blankToDefault(chatModel, "gpt-4.1-mini");
+            chatModel = blankToDefault(chatModel, "gpt-6-luna");
             timeout = timeout == null ? Duration.ofSeconds(20) : timeout;
             maxOutputTokens = maxOutputTokens == 0 ? 256 : maxOutputTokens;
             if (embeddingDimensions != 1536) {

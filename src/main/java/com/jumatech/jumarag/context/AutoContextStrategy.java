@@ -1,5 +1,7 @@
 package com.jumatech.jumarag.context;
 
+import com.jumatech.jumarag.evidence.EvidenceClassificationPolicy;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 
 @Component
@@ -9,14 +11,23 @@ public final class AutoContextStrategy implements ContextStrategy {
     private final RagContextStrategy rag;
     private final HybridContextStrategy hybrid;
     private final ContextProperties properties;
+    private final EvidenceClassificationPolicy evidenceClassifications;
 
-    public AutoContextStrategy(ContextRepository repository, LongContextStrategy longContext,
+    AutoContextStrategy(ContextRepository repository, LongContextStrategy longContext,
             RagContextStrategy rag, HybridContextStrategy hybrid, ContextProperties properties) {
+        this(repository, longContext, rag, hybrid, properties, new EvidenceClassificationPolicy());
+    }
+
+    @Autowired
+    public AutoContextStrategy(ContextRepository repository, LongContextStrategy longContext,
+            RagContextStrategy rag, HybridContextStrategy hybrid, ContextProperties properties,
+            EvidenceClassificationPolicy evidenceClassifications) {
         this.repository = repository;
         this.longContext = longContext;
         this.rag = rag;
         this.hybrid = hybrid;
         this.properties = properties;
+        this.evidenceClassifications = evidenceClassifications;
     }
 
     @Override
@@ -27,7 +38,8 @@ public final class AutoContextStrategy implements ContextStrategy {
     @Override
     public PreparedContext prepare(ContextPreparationRequest request) {
         ContextRepository.SnapshotStats stats = repository.stats(
-                request.knowledgeBase().id(), request.snapshot().id(), request.language());
+                request.knowledgeBase().id(), request.snapshot().id(), request.language(),
+                evidenceClassifications.eligibleClassifications(request.evidenceIntent()));
         if (longContext.fits(stats)) {
             return longContext.prepare(request, ContextStrategyType.AUTO,
                     ContextDecisionReason.SNAPSHOT_FITS_LONG_CONTEXT);

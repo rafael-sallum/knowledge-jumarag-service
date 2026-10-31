@@ -20,6 +20,8 @@ class SalloonOnboardingFilesTest {
     private static final Pattern SHA256 = Pattern.compile("^[a-f0-9]{64}$");
     private static final Set<String> FORBIDDEN_CONTEXT_KEYS = Set.of(
             "userid", "playerid", "auth0subject", "email", "phone", "phonenumber", "deviceid", "name", "handle");
+    private static final Set<String> EVIDENCE_INTENTS = Set.of(
+            "GENERAL", "OFFICIAL_ONLY", "IMPLEMENTATION_ONLY", "OFFICIAL_AND_IMPLEMENTATION");
 
     @Test
     void officialManifestsAreControlledAndPointOnlyToVerifiedAuthorities() throws IOException {
@@ -60,11 +62,21 @@ class SalloonOnboardingFilesTest {
                 assertThat(ids.add(golden.path("id").asText())).isTrue();
                 assertThat(golden.path("question").asText()).isNotBlank();
                 assertThat(golden.path("expectedTopic").asText()).isNotBlank();
+                String evidenceIntent = golden.path("evidenceIntent").asText();
+                assertThat(EVIDENCE_INTENTS).contains(evidenceIntent);
                 assertThat(Set.of("ANSWERED", "INSUFFICIENT_EVIDENCE", "CONFLICTING_SOURCES"))
                         .contains(golden.path("expectedStatus").asText());
-                if (golden.path("requireImplementationEvidence").asBoolean()) implementationCases++;
-                if (golden.path("requireImplementationEvidence").asBoolean()
-                        && golden.path("requireOfficialEvidence").asBoolean()) comparisonCases++;
+                boolean requiresImplementation = golden.path("requireImplementationEvidence").asBoolean();
+                boolean requiresOfficial = golden.path("requireOfficialEvidence").asBoolean();
+                if (requiresImplementation) implementationCases++;
+                if (requiresImplementation && requiresOfficial) comparisonCases++;
+                if (requiresImplementation && requiresOfficial) {
+                    assertThat(evidenceIntent).isEqualTo("OFFICIAL_AND_IMPLEMENTATION");
+                } else if (requiresImplementation) {
+                    assertThat(evidenceIntent).isEqualTo("IMPLEMENTATION_ONLY");
+                } else if (requiresOfficial) {
+                    assertThat(evidenceIntent).isEqualTo("OFFICIAL_ONLY");
+                }
             }
         }
         assertThat(total).isBetween(25, 40);
@@ -105,6 +117,20 @@ class SalloonOnboardingFilesTest {
         }
         String bootstrap = Files.readString(ROOT.resolve("ops/onboarding/salloon/bootstrap.sh"));
         assertThat(bootstrap).contains("resolve_kb", "ensure_snapshot", "activate_snapshot");
+    }
+
+    @Test
+    void plannedSalloonClientHasOnlyAskGrantsAndNoCredential() throws IOException {
+        JsonNode profile = JSON.readTree(ONBOARDING.resolve("integration/client-profile.json").toFile());
+        assertThat(profile.path("name").asText()).isEqualTo("Salloon Score Backend");
+        assertThat(profile.path("credentialProvisioned").asBoolean()).isFalse();
+        assertThat(profile.path("grants").size()).isEqualTo(2);
+        for (JsonNode grant : profile.path("grants")) {
+            assertThat(grant.path("permission").asText()).isEqualTo("ASK");
+            assertThat(grant.path("knowledgeBaseSlug").asText())
+                    .isIn("salloon-snooker-rules", "salloon-brazilian-rules");
+        }
+        assertThat(profile.toString()).doesNotContain("jrag_", "secret", "OPENAI_API_KEY");
     }
 
     private static void collectPropertyNames(JsonNode node, Set<String> names) {

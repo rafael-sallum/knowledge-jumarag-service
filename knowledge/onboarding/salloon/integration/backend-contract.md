@@ -1,6 +1,6 @@
 # Proposed Salloon backend → JumaRAG contract
 
-Status: design only. Phase 4B does not modify Salloon or call JumaRAG from Salloon.
+Status: design only. Phase 4C does not modify Salloon or call JumaRAG from Salloon.
 
 ## Trust boundary
 
@@ -9,7 +9,7 @@ Salloon PWA -> authenticated Salloon backend -> JumaRAG /ask -> configured AI pr
 ```
 
 - The browser never receives a JumaRAG client key or provider credential.
-- Salloon backend uses one revocable `jrag_...` service credential with `ASK` grants only for the two Salloon Knowledge Bases.
+- Salloon backend uses the logical client `Salloon Score Backend`: one revocable `jrag_...` service credential with `ASK` grants only for the two Salloon Knowledge Bases. No production credential exists in this repository.
 - JumaRAG remains consultative. Salloon's event-sourced sporting engine remains authoritative.
 
 ## Knowledge Base selection
@@ -20,7 +20,26 @@ Salloon PWA -> authenticated Salloon backend -> JumaRAG /ask -> configured AI pr
 
 ## Request
 
-Salloon backend sends `POST /v1/knowledge-bases/{allowlisted-slug}/ask` with `X-JumaRAG-API-Key`, locale, question, `contextSchema: salloon.match-context.v1`, and the validated PII-free context object. Initial calls should use the active snapshot; an explicit snapshot is reserved for diagnostics/reproduction.
+Salloon backend sends `POST /v1/knowledge-bases/{allowlisted-slug}/ask` with `X-JumaRAG-API-Key`, locale, question, `contextSchema: salloon.match-context.v1`, an allowlisted `evidenceIntent`, and the validated PII-free context object. Initial calls use the active snapshot; an explicit snapshot is reserved for diagnostics/reproduction.
+
+```json
+{
+  "question": "Qual é a regra oficial e como o Salloon trata esta situação?",
+  "language": "pt-BR",
+  "contextSchema": "salloon.match-context.v1",
+  "evidenceIntent": "OFFICIAL_AND_IMPLEMENTATION",
+  "context": {
+    "schemaVersion": "salloon.match-context.v1",
+    "rulesetFamily": "BRAZILIAN",
+    "rulesetId": "brazilian-cbbs-2012-v1",
+    "profile": "TRADITIONAL"
+  }
+}
+```
+
+Allowed intents are `GENERAL` (default), `OFFICIAL_ONLY`, `IMPLEMENTATION_ONLY`, and `OFFICIAL_AND_IMPLEMENTATION`. Salloon selects from this enum based on the product action; it never forwards raw source classifications. The maximum question is 4,000 characters, context schema 120 characters, serialized context 8 KiB and nesting depth 8 under current defaults.
+
+The request has no provider, model, strategy, SQL, filter-expression, Knowledge Base, or source-class override. Unknown fields and invalid intent values are rejected. Ruleset/profile retrieval filters remain an explicit future server-side mapping; arbitrary context keys never become SQL.
 
 Suggested Salloon endpoint: `POST /me/rules-assistant/questions`. The backend obtains the canonical/local projection data already available to the authenticated match route, maps player IDs to seat slots, validates access to the match, bounds the question, and calls JumaRAG.
 
@@ -32,6 +51,7 @@ Salloon should forward a product DTO containing:
 - `answer`;
 - citations with title, classification, heading and source URL supplied through trusted manifest metadata;
 - `snapshotId` and safe strategy metadata;
+- evidence intent, required/present evidence classes, and `evidenceDiversitySatisfied`;
 - a Salloon request/correlation ID.
 
 Internal provider metadata and raw chunk text need not be shown to the PWA. The UI must label `OFFICIAL_RULE` and `IMPLEMENTATION_NOTE` distinctly.
@@ -44,7 +64,31 @@ Internal provider metadata and raw chunk text need not be shown to the PWA. The 
 - Wrong KB/grant/authentication errors are operational failures and must not be exposed as detailed credentials errors to the browser.
 - No AI failure may block scoring, local events, IndexedDB persistence, synchronization, control, or match completion.
 
+Recommended Salloon mapping:
+
+| JumaRAG outcome | Salloon backend behavior |
+| --- | --- |
+| `ANSWERED` | Return bounded answer and trusted citation metadata. |
+| `INSUFFICIENT_EVIDENCE`, including incomplete comparative diversity | Return an honest cannot-answer result; do not retry automatically. |
+| `CONFLICTING_SOURCES` | Return the conflict state and both source classes for explicit UI treatment. |
+| connect/read timeout, `429`, `503`, circuit open | Return a generic assistant-temporarily-unavailable result; sporting flow continues. |
+| `401`/`403` | Treat as service configuration/credential incident; do not expose details to the PWA. |
+| invalid request or context | Treat as backend integration defect, record safe request ID, and return assistant unavailable. |
+
 ## Citation presentation
 
 Display the answer with numbered citations. Each citation identifies governing body/product source, edition, heading and classification. Official material and Salloon implementation notes must never be visually conflated. Links use the canonical URL from the controlled manifest, not URLs generated by the model.
+
+For `OFFICIAL_AND_IMPLEMENTATION`, Salloon accepts a successful comparative result only when `evidenceDiversitySatisfied` is true and citations include both `OFFICIAL_RULE` and `IMPLEMENTATION_NOTE`. JumaRAG already enforces this; the check is useful defense in depth at the product boundary.
+
+## Feature flag and entitlement boundary
+
+Future Salloon configuration uses `SALLOON_AI_ASSISTANT_ENABLED=false` by default. When false, no JumaRAG request is made. When true, only eligible backend routes may call JumaRAG. Product plan/entitlement checks remain Salloon responsibilities; JumaRAG grants secure the service/Knowledge Base boundary and are not commercial billing logic.
+
+## Trusted routing
+
+- canonical `BRAZILIAN` state routes to `salloon-brazilian-rules`;
+- canonical `SNOOKER` state, including Traditional, Six-red, and Reduced profiles, routes to `salloon-snooker-rules`.
+
+The authenticated backend derives this mapping from the trusted match ruleset/profile. The browser cannot choose an arbitrary KB slug, provider, model, context strategy, or snapshot.
 

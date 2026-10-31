@@ -7,6 +7,7 @@ import com.jumatech.jumarag.embedding.EmbeddingRepository;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.util.List;
+import java.util.Set;
 import java.util.UUID;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Repository;
@@ -28,6 +29,19 @@ public class RetrievalRepository {
             float[] queryEmbedding,
             String language,
             UUID sourceId,
+            int limit) {
+        return search(knowledgeBaseId, snapshotId, embeddingProfileId, queryEmbedding,
+                language, sourceId, Set.of(), limit);
+    }
+
+    public List<RetrievalHit> search(
+            UUID knowledgeBaseId,
+            UUID snapshotId,
+            UUID embeddingProfileId,
+            float[] queryEmbedding,
+            String language,
+            UUID sourceId,
+            Set<String> sourceClassifications,
             int limit) {
         StringBuilder sql = new StringBuilder("""
                 SELECT
@@ -69,6 +83,9 @@ public class RetrievalRepository {
         if (sourceId != null) {
             sql.append(" AND ks.id = :sourceId");
         }
+        if (sourceClassifications != null && !sourceClassifications.isEmpty()) {
+            sql.append(" AND ks.source_classification IN (:sourceClassifications)");
+        }
         sql.append(" ORDER BY ce.embedding <=> CAST(:queryEmbedding AS vector), dc.id LIMIT :limit");
 
         JdbcClient.StatementSpec statement = jdbc.sql(sql.toString())
@@ -82,6 +99,9 @@ public class RetrievalRepository {
         }
         if (sourceId != null) {
             statement = statement.param("sourceId", sourceId);
+        }
+        if (sourceClassifications != null && !sourceClassifications.isEmpty()) {
+            statement = statement.param("sourceClassifications", sourceClassifications);
         }
         return statement.query(this::map).list();
     }

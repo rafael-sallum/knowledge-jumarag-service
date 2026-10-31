@@ -7,6 +7,7 @@ import org.slf4j.LoggerFactory;
 import org.slf4j.MDC;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
@@ -31,6 +32,13 @@ public final class ApiExceptionHandler {
                         .collect(Collectors.joining("; "))
                 : exception.getMessage();
         return ResponseEntity.badRequest().body(error("VALIDATION_FAILED", message));
+    }
+
+    @ExceptionHandler(HttpMessageNotReadableException.class)
+    ResponseEntity<ApiError> unreadable(HttpMessageNotReadableException exception) {
+        return ResponseEntity.badRequest().body(error(
+                "INVALID_REQUEST_BODY",
+                "Request body is malformed or contains an unsupported enum value."));
     }
 
     @ExceptionHandler(NoResourceFoundException.class)

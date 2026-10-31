@@ -29,7 +29,7 @@ for strategy in RAG LONG_CONTEXT HYBRID AUTO; do
     response_file="$(mktemp)"
     http_status="$(curl --silent --show-error -o "$response_file" -w '%{http_code}' -X POST \
       -H "$CLIENT_HEADER" -H 'Content-Type: application/json' \
-      --data "$(printf '%s' "$golden" | jq '{question,language}')" \
+      --data "$(printf '%s' "$golden" | jq '{question,language,evidenceIntent}')" \
       "$API_ROOT/v1/knowledge-bases/$SLUG/ask")"
     response="$(cat "$response_file")"
     rm -f "$response_file"
@@ -37,7 +37,7 @@ for strategy in RAG LONG_CONTEXT HYBRID AUTO; do
     if [[ "$http_status" == "200" ]]; then
       jq -cn --argjson golden "$golden" --argjson response "$response" --arg strategy "$strategy" \
         --argjson latency "$elapsed" --argjson httpStatus "$http_status" \
-        '{caseId:$golden.id,configuredStrategy:$strategy,usedStrategy:$response.contextStrategyUsed,reason:$response.contextDecisionReason,status:$response.status,expectedStatus:$golden.expectedStatus,citationClassifications:[$response.citations[].sourceClassification],contextChunkCount:$response.contextChunkCount,estimatedTokens:$response.contextEstimatedTokens,latencyMillis:$latency,httpStatus:$httpStatus,providerUsage:$response.providerUsage}' \
+        '{caseId:$golden.id,evidenceIntent:$response.evidenceIntent,configuredStrategy:$strategy,usedStrategy:$response.contextStrategyUsed,reason:$response.contextDecisionReason,status:$response.status,expectedStatus:$golden.expectedStatus,requiredEvidenceClasses:$response.requiredEvidenceClasses,presentEvidenceClasses:$response.presentEvidenceClasses,evidenceDiversitySatisfied:$response.evidenceDiversitySatisfied,citationClassifications:[$response.citations[].sourceClassification],contextChunkCount:$response.contextChunkCount,estimatedTokens:$response.contextEstimatedTokens,latencyMillis:$latency,httpStatus:$httpStatus,providerUsage:$response.providerUsage}' \
         >> "$OUTPUT"
     else
       jq -cn --argjson golden "$golden" --argjson response "$response" --arg strategy "$strategy" \

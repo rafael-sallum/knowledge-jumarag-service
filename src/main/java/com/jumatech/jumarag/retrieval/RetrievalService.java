@@ -3,17 +3,24 @@ package com.jumatech.jumarag.retrieval;
 import com.jumatech.jumarag.embedding.EmbeddingGateway;
 import com.jumatech.jumarag.embedding.EmbeddingProfileResolver;
 import com.jumatech.jumarag.embedding.EmbeddingRepository;
+import com.jumatech.jumarag.evidence.EvidenceClassificationPolicy;
+import com.jumatech.jumarag.evidence.EvidenceIntent;
 import com.jumatech.jumarag.knowledgebase.KnowledgeBaseService;
+import com.jumatech.jumarag.provider.ProviderException;
 import com.jumatech.jumarag.security.ApiClientService;
 import com.jumatech.jumarag.snapshot.KnowledgeSnapshot;
 import com.jumatech.jumarag.snapshot.SnapshotService;
 import com.jumatech.jumarag.shared.web.DomainException;
 import com.jumatech.jumarag.source.SourceService;
-import com.jumatech.jumarag.provider.ProviderException;
 import io.micrometer.core.instrument.MeterRegistry;
+import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 
@@ -28,6 +35,7 @@ public final class RetrievalService {
     private final EmbeddingProfileResolver profiles;
     private final RetrievalProperties properties;
     private final MeterRegistry meterRegistry;
+    private final EvidenceClassificationPolicy evidenceClassifications;
 
     public RetrievalService(
             RetrievalRepository repository,
@@ -39,6 +47,22 @@ public final class RetrievalService {
             EmbeddingProfileResolver profiles,
             RetrievalProperties properties,
             MeterRegistry meterRegistry) {
+        this(repository, embeddings, knowledgeBases, sources, clients, snapshots, profiles, properties,
+                meterRegistry, new EvidenceClassificationPolicy());
+    }
+
+    @Autowired
+    public RetrievalService(
+            RetrievalRepository repository,
+            EmbeddingGateway embeddings,
+            KnowledgeBaseService knowledgeBases,
+            SourceService sources,
+            ApiClientService clients,
+            SnapshotService snapshots,
+            EmbeddingProfileResolver profiles,
+            RetrievalProperties properties,
+            MeterRegistry meterRegistry,
+            EvidenceClassificationPolicy evidenceClassifications) {
         this.repository = repository;
         this.embeddings = embeddings;
         this.knowledgeBases = knowledgeBases;
@@ -48,6 +72,7 @@ public final class RetrievalService {
         this.profiles = profiles;
         this.properties = properties;
         this.meterRegistry = meterRegistry;
+        this.evidenceClassifications = evidenceClassifications;
     }
 
     public RetrievalResult searchAuthorized(
@@ -78,6 +103,13 @@ public final class RetrievalService {
     public RetrievalResult searchWithinSnapshot(
             UUID knowledgeBaseId, KnowledgeSnapshot snapshot, String query,
             String language, UUID sourceId, int limit) {
+        return searchWithinSnapshot(knowledgeBaseId, snapshot, query, language, sourceId,
+                EvidenceIntent.GENERAL, limit);
+    }
+
+    public RetrievalResult searchWithinSnapshot(
+            UUID knowledgeBaseId, KnowledgeSnapshot snapshot, String query,
+            String language, UUID sourceId, EvidenceIntent evidenceIntent, int limit) {
         knowledgeBases.require(knowledgeBaseId);
         if (!snapshot.knowledgeBaseId().equals(knowledgeBaseId)) {
             throw new DomainException("SNAPSHOT_OUTSIDE_KNOWLEDGE_BASE", HttpStatus.BAD_REQUEST,
@@ -111,21 +143,47 @@ public final class RetrievalService {
                     "Embedding provider is temporarily unavailable; retry later.");
         }
         String finalLanguage = normalizedLanguage;
-        List<RetrievalHit> hits = meterRegistry.timer("jumarag.retrieval.duration", "provider", embeddings.provider())
-                .record(() -> repository.search(
-                        knowledgeBaseId,
-                        snapshot.id(),
-                        profile.id(),
-                        queryVector,
-                        finalLanguage,
-                        sourceId,
-                        limit));
+        List<Set<String>> groups = evidenceClassifications.retrievalGroups(evidenceIntent);
+        List<List<RetrievalHit>> groupedHits = meterRegistry
+                .timer("jumarag.retrieval.duration", "provider", embeddings.provider())
+                .record(() -> groups.stream()
+                        .map(group -> repository.search(
+                                knowledgeBaseId,
+                                snapshot.id(),
+                                profile.id(),
+                                queryVector,
+                                finalLanguage,
+                                sourceId,
+                                group,
+                                limit))
+                        .toList());
+        List<RetrievalHit> hits = mergeGroups(groupedHits == null ? List.of() : groupedHits, limit);
         return new RetrievalResult(
                 knowledgeBaseId,
                 snapshot.id(),
                 "EXACT_COSINE",
                 profile.name(),
                 hits == null ? List.of() : hits);
+    }
+
+    private static List<RetrievalHit> mergeGroups(List<List<RetrievalHit>> groups, int limit) {
+        if (groups.size() <= 1) {
+            return groups.isEmpty() ? List.of() : groups.getFirst();
+        }
+        Map<UUID, RetrievalHit> merged = new LinkedHashMap<>();
+        int greatest = groups.stream().mapToInt(List::size).max().orElse(0);
+        for (int rank = 0; rank < greatest && merged.size() < limit; rank++) {
+            for (List<RetrievalHit> group : groups) {
+                if (rank < group.size()) {
+                    RetrievalHit hit = group.get(rank);
+                    merged.putIfAbsent(hit.chunkId(), hit);
+                    if (merged.size() == limit) {
+                        break;
+                    }
+                }
+            }
+        }
+        return List.copyOf(new ArrayList<>(merged.values()));
     }
 
     public record RetrievalResult(

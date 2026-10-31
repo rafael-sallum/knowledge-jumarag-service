@@ -3,6 +3,7 @@ package com.jumatech.jumarag.evaluation;
 import com.jumatech.jumarag.answer.AnswerService;
 import com.jumatech.jumarag.answer.AnswerStatus;
 import com.jumatech.jumarag.context.ContextStrategyType;
+import com.jumatech.jumarag.evidence.EvidenceIntent;
 import com.jumatech.jumarag.retrieval.RetrievalService;
 import java.util.List;
 import java.util.Set;
@@ -26,7 +27,10 @@ public final class GoldenEvaluationHarness {
         return new Evaluation(
                 retrieval.embeddingProfile(), answer.contextStrategyConfigured(), answer.contextStrategyUsed(),
                 hitAtK ? 1.0 : 0.0,
-                expectedStatus, validCitationCoverage, answer.contextChunkCount(),
+                answer.status(), expectedStatus, validCitationCoverage,
+                answer.evidenceIntent() == golden.evidenceIntent(),
+                answer.evidenceIntent(), answer.evidenceDiversitySatisfied(),
+                answer.contextChunkCount(),
                 answer.contextEstimatedTokens(), null);
     }
 
@@ -35,7 +39,10 @@ public final class GoldenEvaluationHarness {
         boolean validCitationCoverage = answer.status() != AnswerStatus.ANSWERED || !answer.citations().isEmpty();
         return new Evaluation(answer.embeddingProfile(), answer.contextStrategyConfigured(),
                 answer.contextStrategyUsed(), null,
-                expectedStatus, validCitationCoverage, answer.contextChunkCount(),
+                answer.status(), expectedStatus, validCitationCoverage,
+                answer.evidenceIntent() == golden.evidenceIntent(),
+                answer.evidenceIntent(), answer.evidenceDiversitySatisfied(),
+                answer.contextChunkCount(),
                 answer.contextEstimatedTokens(), latencyMillis);
     }
 
@@ -43,20 +50,34 @@ public final class GoldenEvaluationHarness {
             String question,
             String expectedLogicalSource,
             String expectedHeading,
-            AnswerStatus expectedStatus) {}
+            AnswerStatus expectedStatus,
+            EvidenceIntent evidenceIntent) {
+        public GoldenCase(
+                String question, String expectedLogicalSource, String expectedHeading, AnswerStatus expectedStatus) {
+            this(question, expectedLogicalSource, expectedHeading, expectedStatus, EvidenceIntent.GENERAL);
+        }
+    }
 
     public record Evaluation(
             String embeddingProfile,
             ContextStrategyType configuredStrategy,
             ContextStrategyType usedStrategy,
             Double hitAtK,
+            AnswerStatus answerStatus,
             boolean expectedStatus,
             boolean validCitationCoverage,
+            boolean expectedEvidenceIntent,
+            EvidenceIntent evidenceIntent,
+            boolean evidenceDiversitySatisfied,
             int contextChunkCount,
             int estimatedTokens,
             Long latencyMillis) {
         public boolean passed() {
-            return (hitAtK == null || hitAtK == 1.0) && expectedStatus && validCitationCoverage;
+            return (hitAtK == null || hitAtK == 1.0)
+                    && expectedStatus
+                    && validCitationCoverage
+                    && expectedEvidenceIntent
+                    && (evidenceDiversitySatisfied || answerStatus != AnswerStatus.ANSWERED);
         }
     }
 
@@ -65,6 +86,9 @@ public final class GoldenEvaluationHarness {
                 .mapToDouble(Double::doubleValue).average().orElse(0);
         long statuses = evaluations.stream().filter(Evaluation::expectedStatus).count();
         long citationCoverage = evaluations.stream().filter(Evaluation::validCitationCoverage).count();
+        long evidenceIntents = evaluations.stream().filter(Evaluation::expectedEvidenceIntent).count();
+        long diversity = evaluations.stream().filter(evaluation ->
+                evaluation.evidenceDiversitySatisfied() || evaluation.answerStatus() != AnswerStatus.ANSWERED).count();
         Set<String> profiles = evaluations.stream()
                 .map(Evaluation::embeddingProfile)
                 .filter(java.util.Objects::nonNull)
@@ -74,7 +98,7 @@ public final class GoldenEvaluationHarness {
         Set<ContextStrategyType> usedStrategies = evaluations.stream().map(Evaluation::usedStrategy)
                 .collect(Collectors.toUnmodifiableSet());
         return new Summary(profiles, configuredStrategies, usedStrategies,
-                hitRate, statuses, citationCoverage, evaluations.size());
+                hitRate, statuses, citationCoverage, evidenceIntents, diversity, evaluations.size());
     }
 
     public record Summary(
@@ -84,5 +108,7 @@ public final class GoldenEvaluationHarness {
             double hitAtK,
             long expectedStatuses,
             long validCitationCoverage,
+            long expectedEvidenceIntents,
+            long validEvidenceDiversity,
             int cases) {}
 }

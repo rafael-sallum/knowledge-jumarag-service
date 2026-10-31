@@ -7,6 +7,7 @@ import com.jumatech.jumarag.retrieval.RetrievalHit;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.util.List;
+import java.util.Set;
 import java.util.UUID;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Repository;
@@ -38,6 +39,11 @@ public class ContextRepository {
     }
 
     public SnapshotStats stats(UUID knowledgeBaseId, UUID snapshotId, String language) {
+        return stats(knowledgeBaseId, snapshotId, language, Set.of());
+    }
+
+    public SnapshotStats stats(UUID knowledgeBaseId, UUID snapshotId, String language,
+            Set<String> sourceClassifications) {
         String sql = """
                 SELECT count(*) AS chunk_count, COALESCE(sum(length(dc.text)), 0) AS character_count
                 FROM document_chunk dc
@@ -48,23 +54,38 @@ public class ContextRepository {
                   ON ksi.source_version_id = sv.id AND ksi.knowledge_source_id = ks.id
                 WHERE kb.id = :knowledgeBaseId AND ksi.snapshot_id = :snapshotId
                   AND kb.status = 'ACTIVE' AND ks.enabled = true AND sv.status = 'READY'
-                """ + (language == null ? "" : " AND dc.language = :language");
+                """ + (language == null ? "" : " AND dc.language = :language")
+                + (sourceClassifications == null || sourceClassifications.isEmpty()
+                        ? "" : " AND ks.source_classification IN (:sourceClassifications)");
         JdbcClient.StatementSpec statement = jdbc.sql(sql)
                 .param("knowledgeBaseId", knowledgeBaseId).param("snapshotId", snapshotId);
         if (language != null) {
             statement = statement.param("language", language);
+        }
+        if (sourceClassifications != null && !sourceClassifications.isEmpty()) {
+            statement = statement.param("sourceClassifications", sourceClassifications);
         }
         return statement.query((row, number) -> new SnapshotStats(
                 row.getInt("chunk_count"), row.getInt("character_count"))).single();
     }
 
     public List<RetrievalHit> findSnapshotChunks(UUID knowledgeBaseId, UUID snapshotId, String language) {
+        return findSnapshotChunks(knowledgeBaseId, snapshotId, language, Set.of());
+    }
+
+    public List<RetrievalHit> findSnapshotChunks(UUID knowledgeBaseId, UUID snapshotId, String language,
+            Set<String> sourceClassifications) {
         String sql = SELECT + (language == null ? "" : " AND dc.language = :language")
+                + (sourceClassifications == null || sourceClassifications.isEmpty()
+                        ? "" : " AND ks.source_classification IN (:sourceClassifications)")
                 + " ORDER BY ks.logical_name, ks.id, sv.id, dc.chunk_index, dc.id";
         JdbcClient.StatementSpec statement = jdbc.sql(sql)
                 .param("knowledgeBaseId", knowledgeBaseId).param("snapshotId", snapshotId);
         if (language != null) {
             statement = statement.param("language", language);
+        }
+        if (sourceClassifications != null && !sourceClassifications.isEmpty()) {
+            statement = statement.param("sourceClassifications", sourceClassifications);
         }
         return statement.query(this::map).list();
     }

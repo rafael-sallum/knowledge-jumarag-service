@@ -31,7 +31,7 @@ class AnswerProviderPolicyTest {
     @Test
     void insufficientAndConflictingEvidenceNeverInvokeChatProvider() {
         Fixture fixture = fixture();
-        when(fixture.evidencePolicy.assess(any(), any()))
+        when(fixture.evidencePolicy.assess(any(), any(), any()))
                 .thenReturn(new EvidencePolicy.Assessment(AnswerStatus.INSUFFICIENT_EVIDENCE, List.of()))
                 .thenReturn(new EvidencePolicy.Assessment(
                         AnswerStatus.CONFLICTING_SOURCES, List.of(hit("A"), hit("B"))));
@@ -52,7 +52,7 @@ class AnswerProviderPolicyTest {
     void providerFailureBecomesSafeServiceUnavailableError() {
         Fixture fixture = fixture();
         RetrievalHit hit = hit("A");
-        when(fixture.evidencePolicy.assess(any(), any()))
+        when(fixture.evidencePolicy.assess(any(), any(), any()))
                 .thenReturn(new EvidencePolicy.Assessment(AnswerStatus.ANSWERED, List.of(hit)));
         when(fixture.chat.generate(any()))
                 .thenThrow(new ProviderException(ProviderException.Reason.RATE_LIMITED));
@@ -90,7 +90,7 @@ class AnswerProviderPolicyTest {
                 snapshotId, "EXACT_COSINE", "phase0-fake-1536", List.of(hit("R")),
                 java.util.Set.of(), 20, 5, false));
         when(chat.provider()).thenReturn("OPENAI");
-        when(chat.model()).thenReturn("gpt-4.1-mini");
+        when(chat.model()).thenReturn("gpt-6-luna");
         AnswerProperties properties = new AnswerProperties(
                 "openai", 8, 0.05, 1, 4000, 8192, 8, 6, 12000);
         AnswerService service = new AnswerService(

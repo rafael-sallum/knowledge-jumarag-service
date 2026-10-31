@@ -1,5 +1,6 @@
 package com.jumatech.jumarag.answer;
 
+import java.util.LinkedHashSet;
 import java.util.List;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Component;
@@ -18,7 +19,15 @@ public final class FakeChatGateway implements ChatGateway {
                     request.evidence().stream().map(Evidence::citationId).toList());
             case ANSWERED -> {
                 Evidence evidence = request.evidence().getFirst();
-                yield new GenerationResult("Grounded answer: " + evidence.text(), List.of(evidence.citationId()));
+                LinkedHashSet<String> citationIds = new LinkedHashSet<>();
+                request.requiredEvidenceClasses().forEach(required -> request.evidence().stream()
+                        .filter(item -> required.equals(item.sourceClassification()))
+                        .findFirst()
+                        .ifPresent(item -> citationIds.add(item.citationId())));
+                if (citationIds.isEmpty()) {
+                    citationIds.add(evidence.citationId());
+                }
+                yield new GenerationResult("Grounded answer: " + evidence.text(), List.copyOf(citationIds));
             }
         };
     }

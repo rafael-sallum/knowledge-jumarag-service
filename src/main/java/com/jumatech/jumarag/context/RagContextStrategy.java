@@ -33,7 +33,7 @@ public final class RagContextStrategy implements ContextStrategy {
             ContextDecisionReason reason) {
         RetrievalService.RetrievalResult result = retrieval.searchWithinSnapshot(
                 request.knowledgeBase().id(), request.snapshot(), request.question(), request.language(), null,
-                answerProperties.retrievalLimit());
+                request.evidenceIntent(), answerProperties.retrievalLimit());
         ContextBudget.Selection selection = ContextBudget.select(
                 result.hits(), properties.ragMaxChunks(), properties.ragMaxCharacters(),
                 properties.ragMaxEstimatedTokens());

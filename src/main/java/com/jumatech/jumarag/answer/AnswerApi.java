@@ -1,6 +1,8 @@
 package com.jumatech.jumarag.answer;
 
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.databind.JsonNode;
+import com.jumatech.jumarag.evidence.EvidenceIntent;
 import com.jumatech.jumarag.security.ApiClientService;
 import com.jumatech.jumarag.security.OpenApiConfiguration;
 import io.swagger.v3.oas.annotations.Operation;
@@ -33,7 +35,7 @@ public final class AnswerApi {
     @PostMapping("/{slug}/ask")
     @Operation(
             summary = "Generate a grounded answer from an immutable snapshot",
-            description = "Uses the Knowledge Base's configured RAG, LONG_CONTEXT, HYBRID, or deterministic AUTO strategy. Clients cannot override the strategy.")
+            description = "Uses the Knowledge Base's configured context strategy and an allowlisted evidence intent. OFFICIAL_AND_IMPLEMENTATION requires grounded evidence and citations from both classes. Clients cannot override strategy, provider, or model.")
     @ApiResponses({
         @ApiResponse(responseCode = "200", description = "Grounded answer, insufficient evidence, or source conflict"),
         @ApiResponse(responseCode = "401", description = "Missing, invalid, or disabled client key"),
@@ -47,13 +49,16 @@ public final class AnswerApi {
             @RequestAttribute(ApiClientService.CLIENT_ID_ATTRIBUTE) UUID clientId,
             @Valid @RequestBody AskRequest request) {
         return service.ask(clientId, slug, new AnswerService.AnswerRequest(
-                request.question(), request.language(), request.contextSchema(), request.context(), request.snapshotId()));
+                request.question(), request.language(), request.contextSchema(), request.context(),
+                request.snapshotId(), request.evidenceIntent()));
     }
 
+    @JsonIgnoreProperties(ignoreUnknown = false)
     public record AskRequest(
             @NotBlank @Size(max = 4000) String question,
             @Size(max = 35) String language,
             @Size(max = 120) String contextSchema,
             JsonNode context,
-            UUID snapshotId) {}
+            UUID snapshotId,
+            EvidenceIntent evidenceIntent) {}
 }

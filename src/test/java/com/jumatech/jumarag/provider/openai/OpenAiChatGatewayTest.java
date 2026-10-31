@@ -9,12 +9,14 @@ import static org.mockito.Mockito.when;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.jumatech.jumarag.answer.AnswerStatus;
 import com.jumatech.jumarag.answer.ChatGateway;
+import com.jumatech.jumarag.evidence.EvidenceIntent;
 import com.jumatech.jumarag.provider.ProviderCallExecutor;
 import com.jumatech.jumarag.provider.ProviderException;
 import com.jumatech.jumarag.provider.ProviderProperties;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.time.Duration;
 import java.util.List;
+import java.util.Set;
 import org.junit.jupiter.api.Test;
 import org.springframework.ai.chat.messages.AssistantMessage;
 import org.springframework.ai.chat.metadata.ChatResponseMetadata;
@@ -37,7 +39,8 @@ class OpenAiChatGatewayTest {
 
         ChatGateway.GenerationRequest request = new ChatGateway.GenerationRequest(
                 "Use evidence only.", "What is the rule?", "en", null, null,
-                AnswerStatus.ANSWERED,
+                AnswerStatus.ANSWERED, EvidenceIntent.OFFICIAL_AND_IMPLEMENTATION,
+                Set.of("OFFICIAL_RULE", "IMPLEMENTATION_NOTE"),
                 List.of(new ChatGateway.Evidence("C1", "Controlled evidence.", "OFFICIAL_RULE", "Rule 1")));
         ChatGateway.GenerationResult result = gateway.generate(request);
 
@@ -47,13 +50,16 @@ class OpenAiChatGatewayTest {
 
         Prompt prompt = gateway.prompt(request);
         OpenAiChatOptions options = (OpenAiChatOptions) prompt.getOptions();
-        assertThat(options.getModel()).isEqualTo("gpt-4.1-mini");
-        assertThat(options.getMaxTokens()).isEqualTo(128);
+        assertThat(options.getModel()).isEqualTo("gpt-6-luna");
+        assertThat(options.getMaxCompletionTokens()).isEqualTo(128);
+        assertThat(options.getReasoningEffort()).isEqualTo("none");
         assertThat(options.getResponseFormat()).isNotNull();
         assertThat(prompt.getSystemMessage().getText()).contains("Use evidence only", "required JSON");
         assertThat(prompt.getUserMessage().getText())
                 .contains("\"citationId\":\"C1\"")
-                .contains("\"question\":\"What is the rule?\"");
+                .contains("\"question\":\"What is the rule?\"")
+                .contains("\"evidenceIntent\":\"OFFICIAL_AND_IMPLEMENTATION\"")
+                .contains("OFFICIAL_RULE", "IMPLEMENTATION_NOTE");
     }
 
     @Test
@@ -73,6 +79,6 @@ class OpenAiChatGatewayTest {
         ProviderCallExecutor calls = new ProviderCallExecutor(
                 new ProviderProperties(null, new ProviderProperties.Resilience(3, Duration.ofSeconds(30))),
                 new SimpleMeterRegistry());
-        return new OpenAiChatGateway(model, calls, new ObjectMapper(), "gpt-4.1-mini", 128);
+        return new OpenAiChatGateway(model, calls, new ObjectMapper(), "gpt-6-luna", 128);
     }
 }

@@ -68,13 +68,15 @@ public final class OpenAiChatGateway implements ChatGateway {
         OpenAiChatOptions options = OpenAiChatOptions.builder()
                 .model(modelName)
                 .temperature(0.0)
-                .maxTokens(maxOutputTokens)
+                .maxCompletionTokens(maxOutputTokens)
                 .N(1)
                 .store(false)
+                .reasoningEffort("none")
                 .responseFormat(format)
                 .build();
         String system = request.systemInstruction() + "\nReturn only the required JSON object."
-                + " Every citationIds entry must be one of the evidence IDs supplied by the user payload.";
+                + " Every citationIds entry must be one of the evidence IDs supplied by the user payload."
+                + " When requiredEvidenceClasses is non-empty, cite at least one supplied item from every required class.";
         return new Prompt(List.of(new SystemMessage(system), new UserMessage(userPayload(request))), options);
     }
 
@@ -92,6 +94,8 @@ public final class OpenAiChatGateway implements ChatGateway {
         payload.put("language", request.language());
         payload.put("contextSchema", request.contextSchema());
         payload.put("context", request.context());
+        payload.put("evidenceIntent", request.evidenceIntent());
+        payload.put("requiredEvidenceClasses", request.requiredEvidenceClasses());
         payload.put("evidence", evidence);
         try {
             return objectMapper.writeValueAsString(payload);

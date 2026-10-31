@@ -13,6 +13,9 @@ Before deployment/integration:
 - validate liveness/readiness, provider timeout/circuit-breaker and safe logs;
 - establish request rate limits and operational token/cost budgets;
 - run the approved golden subset against the production provider configuration;
+- re-verify that `JUMARAG_OPENAI_CHAT_MODEL` names a supported model and review current pricing before rollout;
+- validate comparative evidence-intent cases for both source classes and both citations;
+- configure the Salloon-side `SALLOON_AI_ASSISTANT_ENABLED` feature flag off by default;
 - define source-update monitoring and snapshot rollback procedure;
 - keep JumaRAG failure isolated from all Salloon sporting workflows.
 
