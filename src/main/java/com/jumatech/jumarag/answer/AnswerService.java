@@ -3,21 +3,22 @@ package com.jumatech.jumarag.answer;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.jumatech.jumarag.context.ContextPreparationRequest;
+import com.jumatech.jumarag.context.ContextPreparationService;
+import com.jumatech.jumarag.context.PreparedContext;
 import com.jumatech.jumarag.knowledgebase.KnowledgeBaseService;
 import com.jumatech.jumarag.provider.ProviderException;
 import com.jumatech.jumarag.retrieval.RetrievalHit;
-import com.jumatech.jumarag.retrieval.RetrievalService;
 import com.jumatech.jumarag.security.ApiClientService;
 import com.jumatech.jumarag.shared.web.DomainException;
 import com.jumatech.jumarag.shared.web.RequestCorrelationFilter;
+import com.jumatech.jumarag.snapshot.SnapshotService;
 import io.micrometer.core.instrument.MeterRegistry;
-import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
-import java.util.Set;
 import java.util.UUID;
 import org.slf4j.MDC;
 import org.springframework.http.HttpStatus;
@@ -34,7 +35,8 @@ public final class AnswerService {
 
     private final KnowledgeBaseService knowledgeBases;
     private final ApiClientService clients;
-    private final RetrievalService retrieval;
+    private final SnapshotService snapshots;
+    private final ContextPreparationService contexts;
     private final EvidencePolicy evidencePolicy;
     private final ChatGateway chat;
     private final CitationValidator citationValidator;
@@ -43,12 +45,14 @@ public final class AnswerService {
     private final MeterRegistry metrics;
 
     public AnswerService(KnowledgeBaseService knowledgeBases, ApiClientService clients,
-            RetrievalService retrieval, EvidencePolicy evidencePolicy, ChatGateway chat,
+            SnapshotService snapshots, ContextPreparationService contexts,
+            EvidencePolicy evidencePolicy, ChatGateway chat,
             CitationValidator citationValidator, AnswerProperties properties,
             ObjectMapper objectMapper, MeterRegistry metrics) {
         this.knowledgeBases = knowledgeBases;
         this.clients = clients;
-        this.retrieval = retrieval;
+        this.snapshots = snapshots;
+        this.contexts = contexts;
         this.evidencePolicy = evidencePolicy;
         this.chat = chat;
         this.citationValidator = citationValidator;
@@ -66,12 +70,12 @@ public final class AnswerService {
                 : Locale.forLanguageTag(request.language()).toLanguageTag();
         KnowledgeBaseService.validateLocale(language);
 
-        RetrievalService.RetrievalResult result = retrieval.search(
-                knowledgeBase.id(), request.question(), language, null,
-                properties.retrievalLimit(), request.snapshotId());
-        EvidencePolicy.Assessment assessment = evidencePolicy.assess(request.question(), result.hits());
-        List<RetrievalHit> selectedEvidence = boundedEvidence(assessment.evidence());
-        List<Citation> available = citations(knowledgeBase.id(), result.snapshotId(), selectedEvidence);
+        var snapshot = snapshots.resolveForClient(knowledgeBase.id(), request.snapshotId());
+        PreparedContext context = contexts.prepare(new ContextPreparationRequest(
+                knowledgeBase, snapshot, request.question().strip(), language));
+        EvidencePolicy.Assessment assessment = evidencePolicy.assess(request.question(), context);
+        List<RetrievalHit> selectedEvidence = assessment.evidence();
+        List<Citation> available = citations(knowledgeBase.id(), context.snapshotId(), selectedEvidence);
         Map<String, Citation> citationsById = new LinkedHashMap<>();
         available.forEach(citation -> citationsById.put(citation.id(), citation));
         List<ChatGateway.Evidence> gatewayEvidence = selectedEvidence.stream()
@@ -112,17 +116,25 @@ public final class AnswerService {
                     generated.citationIds(), citationsById.keySet(), assessment.status());
         }
         List<Citation> cited = citedIds.stream().map(citationsById::get).toList();
-        metrics.counter("jumarag.answer.completed", "status", assessment.status().name()).increment();
+        metrics.counter("jumarag.answer.completed", "status", assessment.status().name(),
+                "contextStrategy", context.usedStrategy().name()).increment();
         return new AnswerResponse(
                 assessment.status(),
                 generated.answer(),
                 knowledgeBase.id(),
                 knowledgeBase.slug(),
-                result.snapshotId(),
-                result.retrievalProfile(),
-                result.embeddingProfile(),
+                context.snapshotId(),
+                context.retrievalProfile(),
+                context.embeddingProfile(),
                 chat.provider(),
                 chat.model(),
+                context.configuredStrategy(),
+                context.usedStrategy(),
+                context.decisionReason(),
+                context.evidence().size(),
+                context.characterCount(),
+                context.estimatedTokens(),
+                context.completeSnapshot(),
                 cited,
                 generated.usage(),
                 MDC.get(RequestCorrelationFilter.REQUEST_ID));
@@ -139,35 +151,6 @@ public final class AnswerService {
                     "The controlled sources contain conflicting assertions; review the cited evidence.",
                     evidence.stream().map(ChatGateway.Evidence::citationId).toList());
         };
-    }
-
-    private List<RetrievalHit> boundedEvidence(List<RetrievalHit> evidence) {
-        if (evidence.isEmpty()) {
-            return List.of();
-        }
-        List<RetrievalHit> selected = new ArrayList<>();
-        int remaining = properties.maxEvidenceCharacters();
-        for (RetrievalHit hit : evidence) {
-            if (selected.size() >= properties.maxEvidenceChunks() || remaining <= 0) {
-                break;
-            }
-            if (hit.text().length() <= remaining) {
-                selected.add(hit);
-                remaining -= hit.text().length();
-            } else if (selected.isEmpty()) {
-                selected.add(withText(hit, hit.text().substring(0, remaining)));
-                remaining = 0;
-            }
-        }
-        return List.copyOf(selected);
-    }
-
-    private static RetrievalHit withText(RetrievalHit hit, String text) {
-        return new RetrievalHit(
-                hit.chunkId(), hit.sourceId(), hit.sourceVersionId(), hit.logicalSourceName(),
-                hit.sourceClassification(), hit.sourceTitle(), hit.originalFilename(), hit.chunkIndex(),
-                text, hit.language(), hit.headingPath(), hit.pageStart(), hit.pageEnd(), hit.metadata(),
-                hit.sourceMetadata(), hit.sourceVersionMetadata(), hit.similarity());
     }
 
     private void validate(AnswerRequest request) {
@@ -244,6 +227,13 @@ public final class AnswerService {
             String embeddingProfile,
             String chatProvider,
             String chatModel,
+            com.jumatech.jumarag.context.ContextStrategyType contextStrategyConfigured,
+            com.jumatech.jumarag.context.ContextStrategyType contextStrategyUsed,
+            com.jumatech.jumarag.context.ContextDecisionReason contextDecisionReason,
+            int contextChunkCount,
+            int contextCharacterCount,
+            int contextEstimatedTokens,
+            boolean contextCompleteSnapshot,
             List<Citation> citations,
             ChatGateway.Usage providerUsage,
             String requestId) {}

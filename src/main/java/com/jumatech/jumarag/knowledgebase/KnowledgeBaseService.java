@@ -1,5 +1,6 @@
 package com.jumatech.jumarag.knowledgebase;
 
+import com.jumatech.jumarag.context.ContextStrategyType;
 import com.jumatech.jumarag.shared.web.DomainException;
 import java.time.Clock;
 import java.time.OffsetDateTime;
@@ -29,8 +30,14 @@ public final class KnowledgeBaseService {
     }
 
     public KnowledgeBase create(String slug, String name, String description, String defaultLocale) {
+        return create(slug, name, description, defaultLocale, ContextStrategyType.AUTO);
+    }
+
+    public KnowledgeBase create(String slug, String name, String description, String defaultLocale,
+            ContextStrategyType contextStrategy) {
         validateSlug(slug);
         validateLocale(defaultLocale);
+        ContextStrategyType effectiveStrategy = contextStrategy == null ? ContextStrategyType.AUTO : contextStrategy;
         OffsetDateTime now = OffsetDateTime.now(clock);
         KnowledgeBase knowledgeBase = new KnowledgeBase(
                 UUID.randomUUID(),
@@ -39,6 +46,7 @@ public final class KnowledgeBaseService {
                 description.trim(),
                 defaultLocale,
                 KnowledgeBase.Status.ACTIVE,
+                effectiveStrategy,
                 now,
                 now);
         try {
@@ -67,6 +75,15 @@ public final class KnowledgeBaseService {
 
     public KnowledgeBase requireBySlug(String slug) {
         return repository.findBySlug(slug).orElseThrow(this::notFound);
+    }
+
+    public KnowledgeBase updateContextStrategy(UUID id, ContextStrategyType strategy) {
+        require(id);
+        if (strategy == null) {
+            throw new DomainException("INVALID_CONTEXT_STRATEGY", HttpStatus.BAD_REQUEST,
+                    "A supported context strategy is required.");
+        }
+        return repository.updateContextStrategy(id, strategy, OffsetDateTime.now(clock));
     }
 
     static void validateSlug(String slug) {

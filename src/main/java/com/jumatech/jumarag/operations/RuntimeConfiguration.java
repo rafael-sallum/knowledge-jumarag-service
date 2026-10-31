@@ -2,6 +2,7 @@ package com.jumatech.jumarag.operations;
 
 import com.jumatech.jumarag.ingestion.IngestionProperties;
 import com.jumatech.jumarag.answer.AnswerProperties;
+import com.jumatech.jumarag.context.ContextProperties;
 import com.jumatech.jumarag.provider.ProviderProperties;
 import com.jumatech.jumarag.retrieval.RetrievalProperties;
 import com.jumatech.jumarag.security.SecurityProperties;
@@ -19,6 +20,7 @@ import org.springframework.context.annotation.Configuration;
     SecurityProperties.class,
     IngestionProperties.class,
     AnswerProperties.class,
+    ContextProperties.class,
     ProviderProperties.class,
     RetrievalProperties.class
 })

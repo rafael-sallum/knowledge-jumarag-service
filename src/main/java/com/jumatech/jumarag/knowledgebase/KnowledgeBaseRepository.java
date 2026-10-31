@@ -20,9 +20,9 @@ public class KnowledgeBaseRepository {
     public KnowledgeBase insert(KnowledgeBase knowledgeBase) {
         jdbc.sql("""
                         INSERT INTO knowledge_base (
-                            id, slug, name, description, default_locale, status, created_at, updated_at
+                            id, slug, name, description, default_locale, status, context_strategy, created_at, updated_at
                         ) VALUES (
-                            :id, :slug, :name, :description, :defaultLocale, :status, :createdAt, :updatedAt
+                            :id, :slug, :name, :description, :defaultLocale, :status, :contextStrategy, :createdAt, :updatedAt
                         )
                         """)
                 .param("id", knowledgeBase.id())
@@ -31,6 +31,7 @@ public class KnowledgeBaseRepository {
                 .param("description", knowledgeBase.description())
                 .param("defaultLocale", knowledgeBase.defaultLocale())
                 .param("status", knowledgeBase.status().name())
+                .param("contextStrategy", knowledgeBase.contextStrategy().name())
                 .param("createdAt", knowledgeBase.createdAt())
                 .param("updatedAt", knowledgeBase.updatedAt())
                 .update();
@@ -57,6 +58,20 @@ public class KnowledgeBaseRepository {
                 .optional();
     }
 
+    public KnowledgeBase updateContextStrategy(UUID id,
+            com.jumatech.jumarag.context.ContextStrategyType strategy, OffsetDateTime updatedAt) {
+        jdbc.sql("""
+                        UPDATE knowledge_base
+                        SET context_strategy = :strategy, updated_at = :updatedAt
+                        WHERE id = :id
+                        """)
+                .param("strategy", strategy.name())
+                .param("updatedAt", updatedAt)
+                .param("id", id)
+                .update();
+        return findById(id).orElseThrow();
+    }
+
     private static KnowledgeBase map(ResultSet row, int rowNumber) throws SQLException {
         return new KnowledgeBase(
                 row.getObject("id", UUID.class),
@@ -65,6 +80,7 @@ public class KnowledgeBaseRepository {
                 row.getString("description"),
                 row.getString("default_locale"),
                 KnowledgeBase.Status.valueOf(row.getString("status")),
+                com.jumatech.jumarag.context.ContextStrategyType.valueOf(row.getString("context_strategy")),
                 row.getObject("created_at", OffsetDateTime.class),
                 row.getObject("updated_at", OffsetDateTime.class));
     }

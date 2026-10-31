@@ -30,3 +30,15 @@ app:
     max-context-depth: 5
     max-evidence-chunks: 6
     max-evidence-characters: 12000
+  context:
+    rag-max-chunks: 6
+    rag-max-characters: 12000
+    rag-max-estimated-tokens: 3000
+    long-context-max-chunks: 24
+    long-context-max-characters: 24000
+    long-context-max-estimated-tokens: 6000
+    hybrid-neighbor-chunks: 1
+    hybrid-max-chunks: 12
+    hybrid-max-characters: 18000
+    hybrid-max-estimated-tokens: 4500
+    auto-strong-similarity: 0.35

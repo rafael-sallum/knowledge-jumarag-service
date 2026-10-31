@@ -2,7 +2,7 @@
 
 `knowledge-jumarag-service` is a reusable, versioned, retrieval-grounded domain knowledge service. Salloon Score is its first planned client, but the core has no Salloon-specific rules and is not a generic chatbot.
 
-Phase 3 adds the first real provider adapters while keeping the core provider-neutral. Deterministic fake embedding and chat gateways remain the defaults for local development and CI. OpenAI is opt-in at runtime; no credential is required to build or test the project and no provider call is made unless explicitly selected.
+Phase 4A adds provider-neutral context orchestration. A Knowledge Base can use focused vector retrieval, a bounded complete snapshot, retrieved anchors plus neighboring chunks, or deterministic automatic selection. Deterministic fake embedding and chat gateways remain the defaults for local development and CI. OpenAI remains opt-in at runtime; no credential is required to build or test the project and no provider call is made unless explicitly selected.
 
 ## Boundary and stack
 
@@ -16,7 +16,9 @@ AI remains consultative. Client domain systems remain authoritative for their st
          |                                                   |
          +---- exact snapshot-filtered pgvector retrieval ---+
                                                              |
-                    RETRIEVE evidence          ASK grounded answer
+                    RETRIEVE evidence          ASK context strategy
+                                                   |
+                                  RAG / LONG_CONTEXT / HYBRID / AUTO
                                                    |
                                       provider-neutral ChatGateway
                                                    |
@@ -119,10 +121,10 @@ The response exposes the Knowledge Base, snapshot, retrieval profile, embedding 
 `POST /v1/knowledge-bases/{slug}/ask` requires an `ASK` grant. The pipeline:
 
 1. resolves the active or requested published snapshot;
-2. creates a query embedding using the explicitly selected retrieval profile;
-3. performs exact pgvector search inside the snapshot;
+2. resolves the Knowledge Base context strategy;
+3. prepares bounded evidence without crossing snapshot/source/language boundaries;
 4. evaluates evidence sufficiency and explicit conflicts deterministically;
-5. gives only bounded selected evidence and allowed citation IDs to `ChatGateway` when the local evidence policy returns `ANSWERED`;
+5. gives only prepared evidence and allowed citation IDs to `ChatGateway` when the local evidence policy returns `ANSWERED`;
 6. validates every generated citation before returning it.
 
 ```bash
@@ -143,6 +145,25 @@ Answer states:
 - `CONFLICTING_SOURCES`: relevant sources carry the same `assertionKey` with different `assertionValue` metadata; all conflicting evidence is surfaced.
 
 Conflict metadata is a deliberately modest Phase 2 seam, not semantic contradiction detection. Source classification remains visible and no lower-authority source is silently discarded.
+
+## Context strategies
+
+Context selection is a Knowledge Base policy, not a free-form client request. New bases default to `AUTO`; migration preserves `RAG` for bases created before Phase 4A so rollout does not silently change existing answers. Administrators can change the policy explicitly:
+
+```bash
+curl -sS -X PATCH "$API_ROOT/v1/admin/knowledge-bases/$KB_ID/context-strategy" \
+  -H "Authorization: Bearer $ADMIN_TOKEN" -H 'Content-Type: application/json' \
+  -d '{"contextStrategy":"HYBRID"}'
+```
+
+- `RAG`: embeds the question once and reuses the existing snapshot-aware exact-cosine pgvector retrieval. It is focused and usually lowest-context, but depends on retrieval quality.
+- `LONG_CONTEXT`: supplies the complete eligible snapshot in deterministic source/version/chunk order and does not generate a query embedding. It is suitable only when the entire language-filtered snapshot fits all configured limits. An oversized snapshot fails explicitly with `LONG_CONTEXT_BUDGET_EXCEEDED`; JumaRAG never presents an arbitrary prefix as complete evidence.
+- `HYBRID`: runs RAG once, then adds the configured previous/next chunks from each anchor's same immutable SourceVersion. Anchors determine relevance; neighbors cannot manufacture a positive evidence signal.
+- `AUTO`: if the full snapshot fits the long-context budget, selects `LONG_CONTEXT` without an embedding call. Otherwise it performs one retrieval: a strong top similarity selects `RAG`, while a weaker signal selects `HYBRID` using that same result. It never uses an LLM router or duplicates query embedding calls.
+
+Every strategy still enforces the active/published snapshot, source enabled state, Knowledge Base/language isolation, ASK grant, source provenance, bounded context, deterministic evidence status, and allowlisted citations. `/retrieval/search` remains a direct vector retrieval API and does not run context strategies.
+
+The `/ask` response exposes `contextStrategyConfigured`, `contextStrategyUsed`, `contextDecisionReason`, chunk/character/token estimates, and whether the complete snapshot was supplied. Token estimates use a deterministic four-characters-per-token approximation for budgeting; they are calibration values, not provider billing counts. Micrometer records preparation duration, failures, selected strategy, chunks, and estimated tokens without logging evidence.
 
 ## Citations and auditability
 
@@ -220,9 +241,11 @@ The deterministic test harness measures:
 
 - Hit@K-style expected source/heading retrieval;
 - expected answer status;
-- citation coverage against actually retrieved chunks.
+- citation coverage against actually supplied chunks;
+- context strategy used, chunk count, estimated tokens, and optional latency.
 
 Fixtures cover an answerable free-ball question, insufficient evidence, and explicit controlled conflicts. Reports identify the embedding profile so the same corpus can be evaluated manually against fake and OpenAI spaces while CI remains deterministic and provider-free.
+Phase 4A fixtures additionally compare focused RAG, bounded complete snapshots, neighboring expansion, and deterministic AUTO selection. Hit@K is reported only when retrieval applies.
 
 ## Configuration
 
@@ -238,6 +261,17 @@ Fixtures cover an answerable free-ball question, insufficient evidence, and expl
 - `JUMARAG_MAX_CONTEXT_DEPTH=8`
 - `JUMARAG_OPENAI_MAX_EVIDENCE_CHUNKS=6`
 - `JUMARAG_OPENAI_MAX_EVIDENCE_CHARACTERS=12000`
+- `JUMARAG_RAG_MAX_CHUNKS=6`
+- `JUMARAG_RAG_MAX_CHARACTERS=12000`
+- `JUMARAG_RAG_MAX_ESTIMATED_TOKENS=3000`
+- `JUMARAG_LONG_CONTEXT_MAX_CHUNKS=24`
+- `JUMARAG_LONG_CONTEXT_MAX_CHARACTERS=24000`
+- `JUMARAG_LONG_CONTEXT_MAX_ESTIMATED_TOKENS=6000`
+- `JUMARAG_HYBRID_NEIGHBOR_CHUNKS=1`
+- `JUMARAG_HYBRID_MAX_CHUNKS=12`
+- `JUMARAG_HYBRID_MAX_CHARACTERS=18000`
+- `JUMARAG_HYBRID_MAX_ESTIMATED_TOKENS=4500`
+- `JUMARAG_AUTO_STRONG_SIMILARITY=0.35`
 - `JUMARAG_OPENAI_TIMEOUT_SECONDS=20`
 - `JUMARAG_OPENAI_MAX_OUTPUT_TOKENS=256`
 - `JUMARAG_PROVIDER_FAILURE_THRESHOLD=3`
@@ -267,3 +301,4 @@ Deferred: Salloon integration, Ollama/Gemini/Anthropic/Azure, Responses API migr
 - [ADR-012](docs/adr/ADR-012-provider-neutral-real-ai.md): provider-neutral real AI adapters
 - [ADR-013](docs/adr/ADR-013-embedding-profile-isolation.md): vector-space identity and safe backfill
 - [ADR-014](docs/adr/ADR-014-provider-resilience-and-cost-guards.md): failure isolation and bounded cost
+- [ADR-015](docs/adr/ADR-015-context-strategy-orchestration.md): provider-neutral context strategy orchestration

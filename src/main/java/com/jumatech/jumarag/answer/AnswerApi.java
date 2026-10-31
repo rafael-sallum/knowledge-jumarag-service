@@ -31,13 +31,15 @@ public final class AnswerApi {
     }
 
     @PostMapping("/{slug}/ask")
-    @Operation(summary = "Generate a grounded answer from an immutable snapshot")
+    @Operation(
+            summary = "Generate a grounded answer from an immutable snapshot",
+            description = "Uses the Knowledge Base's configured RAG, LONG_CONTEXT, HYBRID, or deterministic AUTO strategy. Clients cannot override the strategy.")
     @ApiResponses({
         @ApiResponse(responseCode = "200", description = "Grounded answer, insufficient evidence, or source conflict"),
         @ApiResponse(responseCode = "401", description = "Missing, invalid, or disabled client key"),
         @ApiResponse(responseCode = "403", description = "Client lacks an ASK grant"),
         @ApiResponse(responseCode = "409", description = "Knowledge base has no active snapshot"),
-        @ApiResponse(responseCode = "422", description = "Grounded generation contract failed"),
+        @ApiResponse(responseCode = "422", description = "Grounding contract or configured context budget failed"),
         @ApiResponse(responseCode = "503", description = "Configured embedding or chat provider is temporarily unavailable")
     })
     AnswerService.AnswerResponse ask(

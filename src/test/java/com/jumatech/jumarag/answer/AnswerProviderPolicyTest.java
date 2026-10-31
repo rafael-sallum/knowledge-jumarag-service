@@ -9,13 +9,18 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.jumatech.jumarag.context.ContextDecisionReason;
+import com.jumatech.jumarag.context.ContextPreparationService;
+import com.jumatech.jumarag.context.ContextStrategyType;
+import com.jumatech.jumarag.context.PreparedContext;
 import com.jumatech.jumarag.knowledgebase.KnowledgeBase;
 import com.jumatech.jumarag.knowledgebase.KnowledgeBaseService;
 import com.jumatech.jumarag.provider.ProviderException;
 import com.jumatech.jumarag.retrieval.RetrievalHit;
-import com.jumatech.jumarag.retrieval.RetrievalService;
 import com.jumatech.jumarag.security.ApiClientService;
 import com.jumatech.jumarag.shared.web.DomainException;
+import com.jumatech.jumarag.snapshot.KnowledgeSnapshot;
+import com.jumatech.jumarag.snapshot.SnapshotService;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.time.OffsetDateTime;
 import java.util.List;
@@ -68,22 +73,28 @@ class AnswerProviderPolicyTest {
         UUID snapshotId = UUID.randomUUID();
         KnowledgeBase base = new KnowledgeBase(
                 knowledgeBaseId, "rules", "Rules", "Test", "en", KnowledgeBase.Status.ACTIVE,
+                ContextStrategyType.RAG,
                 OffsetDateTime.now(), OffsetDateTime.now());
         KnowledgeBaseService knowledgeBases = mock(KnowledgeBaseService.class);
         ApiClientService clients = mock(ApiClientService.class);
-        RetrievalService retrieval = mock(RetrievalService.class);
+        SnapshotService snapshots = mock(SnapshotService.class);
+        ContextPreparationService contexts = mock(ContextPreparationService.class);
         EvidencePolicy evidence = mock(EvidencePolicy.class);
         ChatGateway chat = mock(ChatGateway.class);
+        KnowledgeSnapshot snapshot = mock(KnowledgeSnapshot.class);
         when(knowledgeBases.requireBySlug("rules")).thenReturn(base);
-        when(retrieval.search(any(), any(), any(), any(), any(Integer.class), any()))
-                .thenReturn(new RetrievalService.RetrievalResult(
-                        knowledgeBaseId, snapshotId, "EXACT_COSINE", "phase0-fake-1536", List.of(hit("R"))));
+        when(snapshot.id()).thenReturn(snapshotId);
+        when(snapshots.resolveForClient(knowledgeBaseId, null)).thenReturn(snapshot);
+        when(contexts.prepare(any())).thenReturn(new PreparedContext(
+                ContextStrategyType.RAG, ContextStrategyType.RAG, ContextDecisionReason.CONFIGURED_RAG,
+                snapshotId, "EXACT_COSINE", "phase0-fake-1536", List.of(hit("R")),
+                java.util.Set.of(), 20, 5, false));
         when(chat.provider()).thenReturn("OPENAI");
         when(chat.model()).thenReturn("gpt-4.1-mini");
         AnswerProperties properties = new AnswerProperties(
                 "openai", 8, 0.05, 1, 4000, 8192, 8, 6, 12000);
         AnswerService service = new AnswerService(
-                knowledgeBases, clients, retrieval, evidence, chat, new CitationValidator(), properties,
+                knowledgeBases, clients, snapshots, contexts, evidence, chat, new CitationValidator(), properties,
                 new ObjectMapper(), new SimpleMeterRegistry());
         return new Fixture(service, evidence, chat, clientId);
     }

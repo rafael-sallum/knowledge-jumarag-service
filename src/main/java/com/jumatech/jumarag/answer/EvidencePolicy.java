@@ -1,6 +1,7 @@
 package com.jumatech.jumarag.answer;
 
 import com.fasterxml.jackson.databind.JsonNode;
+import com.jumatech.jumarag.context.PreparedContext;
 import com.jumatech.jumarag.retrieval.RetrievalHit;
 import java.text.Normalizer;
 import java.util.ArrayList;
@@ -22,7 +23,16 @@ public final class EvidencePolicy {
         this.properties = properties;
     }
 
-    public Assessment assess(String question, List<RetrievalHit> candidates) {
+    public Assessment assess(String question, PreparedContext context) {
+        return switch (context.usedStrategy()) {
+            case RAG -> assessRag(question, context.evidence());
+            case LONG_CONTEXT -> assessLongContext(question, context.evidence());
+            case HYBRID -> assessHybrid(question, context);
+            case AUTO -> throw new IllegalStateException("AUTO must resolve to a concrete context strategy.");
+        };
+    }
+
+    private Assessment assessRag(String question, List<RetrievalHit> candidates) {
         Set<String> queryTokens = tokens(question);
         List<RetrievalHit> usable = candidates.stream()
                 .filter(hit -> hit.similarity() >= properties.minimumSimilarity())
@@ -36,6 +46,39 @@ public final class EvidencePolicy {
             return new Assessment(AnswerStatus.CONFLICTING_SOURCES, conflicts);
         }
         return new Assessment(AnswerStatus.ANSWERED, usable);
+    }
+
+    private Assessment assessLongContext(String question, List<RetrievalHit> evidence) {
+        if (evidence.isEmpty()) {
+            return new Assessment(AnswerStatus.INSUFFICIENT_EVIDENCE, List.of());
+        }
+        Set<String> queryTokens = tokens(question);
+        List<RetrievalHit> relevant = evidence.stream()
+                .filter(hit -> overlap(queryTokens, tokens(hit.text())) >= properties.minimumTokenOverlap())
+                .toList();
+        if (relevant.isEmpty()) {
+            return new Assessment(AnswerStatus.INSUFFICIENT_EVIDENCE, List.of());
+        }
+        List<RetrievalHit> conflicts = conflicts(relevant);
+        if (!conflicts.isEmpty()) {
+            return new Assessment(AnswerStatus.CONFLICTING_SOURCES, conflicts);
+        }
+        return new Assessment(AnswerStatus.ANSWERED, evidence);
+    }
+
+    private Assessment assessHybrid(String question, PreparedContext context) {
+        List<RetrievalHit> anchors = context.evidence().stream()
+                .filter(hit -> context.relevanceAnchorChunkIds().contains(hit.chunkId()))
+                .toList();
+        Assessment anchorAssessment = assessRag(question, anchors);
+        if (anchorAssessment.status() == AnswerStatus.INSUFFICIENT_EVIDENCE) {
+            return anchorAssessment;
+        }
+        List<RetrievalHit> conflicts = conflicts(context.evidence());
+        if (!conflicts.isEmpty()) {
+            return new Assessment(AnswerStatus.CONFLICTING_SOURCES, conflicts);
+        }
+        return new Assessment(AnswerStatus.ANSWERED, context.evidence());
     }
 
     private static List<RetrievalHit> conflicts(List<RetrievalHit> evidence) {

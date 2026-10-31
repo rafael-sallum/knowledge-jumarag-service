@@ -1,0 +1,11 @@
+package com.jumatech.jumarag.context;
+
+public enum ContextDecisionReason {
+    CONFIGURED_RAG,
+    CONFIGURED_LONG_CONTEXT,
+    CONFIGURED_HYBRID,
+    SNAPSHOT_FITS_LONG_CONTEXT,
+    STRONG_RETRIEVAL_SIGNAL,
+    RETRIEVAL_NEEDS_CONTEXT_EXPANSION,
+    CONFIGURED_FALLBACK
+}

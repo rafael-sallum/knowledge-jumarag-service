@@ -43,6 +43,18 @@ app:
     max-context-depth: ${JUMARAG_MAX_CONTEXT_DEPTH:8}
     max-evidence-chunks: ${JUMARAG_OPENAI_MAX_EVIDENCE_CHUNKS:6}
     max-evidence-characters: ${JUMARAG_OPENAI_MAX_EVIDENCE_CHARACTERS:12000}
+  context:
+    rag-max-chunks: ${JUMARAG_RAG_MAX_CHUNKS:${JUMARAG_OPENAI_MAX_EVIDENCE_CHUNKS:6}}
+    rag-max-characters: ${JUMARAG_RAG_MAX_CHARACTERS:${JUMARAG_OPENAI_MAX_EVIDENCE_CHARACTERS:12000}}
+    rag-max-estimated-tokens: ${JUMARAG_RAG_MAX_ESTIMATED_TOKENS:3000}
+    long-context-max-chunks: ${JUMARAG_LONG_CONTEXT_MAX_CHUNKS:24}
+    long-context-max-characters: ${JUMARAG_LONG_CONTEXT_MAX_CHARACTERS:24000}
+    long-context-max-estimated-tokens: ${JUMARAG_LONG_CONTEXT_MAX_ESTIMATED_TOKENS:6000}
+    hybrid-neighbor-chunks: ${JUMARAG_HYBRID_NEIGHBOR_CHUNKS:1}
+    hybrid-max-chunks: ${JUMARAG_HYBRID_MAX_CHUNKS:12}
+    hybrid-max-characters: ${JUMARAG_HYBRID_MAX_CHARACTERS:18000}
+    hybrid-max-estimated-tokens: ${JUMARAG_HYBRID_MAX_ESTIMATED_TOKENS:4500}
+    auto-strong-similarity: ${JUMARAG_AUTO_STRONG_SIMILARITY:0.35}
   provider:
     openai:
       api-key: ${OPENAI_API_KEY:}

@@ -71,6 +71,18 @@ public final class RetrievalService {
     public RetrievalResult search(
             UUID knowledgeBaseId, String query, String language, UUID sourceId, int limit, UUID snapshotId) {
         knowledgeBases.require(knowledgeBaseId);
+        KnowledgeSnapshot snapshot = snapshots.resolveForClient(knowledgeBaseId, snapshotId);
+        return searchWithinSnapshot(knowledgeBaseId, snapshot, query, language, sourceId, limit);
+    }
+
+    public RetrievalResult searchWithinSnapshot(
+            UUID knowledgeBaseId, KnowledgeSnapshot snapshot, String query,
+            String language, UUID sourceId, int limit) {
+        knowledgeBases.require(knowledgeBaseId);
+        if (!snapshot.knowledgeBaseId().equals(knowledgeBaseId)) {
+            throw new DomainException("SNAPSHOT_OUTSIDE_KNOWLEDGE_BASE", HttpStatus.BAD_REQUEST,
+                    "Snapshot does not belong to the selected knowledge base.");
+        }
         if (query == null || query.isBlank()) {
             throw new DomainException("INVALID_RETRIEVAL_QUERY", HttpStatus.BAD_REQUEST, "Query must not be blank.");
         }
@@ -88,7 +100,6 @@ public final class RetrievalService {
                     HttpStatus.BAD_REQUEST,
                     "Source filter does not belong to the selected knowledge base.");
         }
-        KnowledgeSnapshot snapshot = snapshots.resolveForClient(knowledgeBaseId, snapshotId);
         EmbeddingRepository.EmbeddingProfile profile = profiles.requireCompatible(properties.embeddingProfile());
         float[] queryVector;
         try {
