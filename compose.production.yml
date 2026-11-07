@@ -1,4 +1,4 @@
-name: knowledge-jumarag-service
+name: jumarag
 
 x-runtime: &runtime
   image: ${JUMARAG_IMAGE:?Set JUMARAG_IMAGE to an immutable image reference}
@@ -6,8 +6,9 @@ x-runtime: &runtime
     DATABASE_URL: jdbc:postgresql://postgres:5432/${POSTGRES_DB:?Set POSTGRES_DB}
     DATABASE_USER: ${POSTGRES_USER:?Set POSTGRES_USER}
     DATABASE_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD}
-    JUMARAG_EMBEDDING_PROVIDER: ${JUMARAG_EMBEDDING_PROVIDER:-fake}
-    JUMARAG_CHAT_PROVIDER: ${JUMARAG_CHAT_PROVIDER:-fake}
+    DATABASE_POOL_SIZE: ${DATABASE_POOL_SIZE:-8}
+    JUMARAG_EMBEDDING_PROVIDER: ${JUMARAG_EMBEDDING_PROVIDER:?Set JUMARAG_EMBEDDING_PROVIDER to openai}
+    JUMARAG_CHAT_PROVIDER: ${JUMARAG_CHAT_PROVIDER:?Set JUMARAG_CHAT_PROVIDER to openai}
     APP_MIGRATIONS_ENABLED: "false"
     JUMARAG_ADMIN_TOKEN: ${JUMARAG_ADMIN_TOKEN:?Set JUMARAG_ADMIN_TOKEN}
     JUMARAG_API_KEY_PEPPER: ${JUMARAG_API_KEY_PEPPER:?Set JUMARAG_API_KEY_PEPPER}
@@ -16,9 +17,10 @@ x-runtime: &runtime
     JUMARAG_CHUNK_TARGET_WORDS: ${JUMARAG_CHUNK_TARGET_WORDS:-650}
     JUMARAG_CHUNK_MAX_WORDS: ${JUMARAG_CHUNK_MAX_WORDS:-900}
     JUMARAG_CHUNK_OVERLAP_WORDS: ${JUMARAG_CHUNK_OVERLAP_WORDS:-100}
-    JUMARAG_DEFAULT_EMBEDDING_PROFILE: ${JUMARAG_DEFAULT_EMBEDDING_PROFILE:-phase0-fake-1536}
-    JUMARAG_RETRIEVAL_EMBEDDING_PROFILE: ${JUMARAG_RETRIEVAL_EMBEDDING_PROFILE:-phase0-fake-1536}
-    OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+    JUMARAG_DEFAULT_EMBEDDING_PROFILE: ${JUMARAG_DEFAULT_EMBEDDING_PROFILE:?Set the production embedding profile}
+    JUMARAG_RETRIEVAL_EMBEDDING_PROFILE: ${JUMARAG_RETRIEVAL_EMBEDDING_PROFILE:?Set the production retrieval profile}
+    OPENAI_API_KEY: ${OPENAI_API_KEY:?Set a dedicated production OpenAI key}
+    JUMARAG_OPENAI_BASE_URL: ${JUMARAG_OPENAI_BASE_URL:-https://api.openai.com}
     JUMARAG_OPENAI_EMBEDDING_MODEL: ${JUMARAG_OPENAI_EMBEDDING_MODEL:-text-embedding-3-small}
     JUMARAG_OPENAI_EMBEDDING_DIMENSIONS: ${JUMARAG_OPENAI_EMBEDDING_DIMENSIONS:-1536}
     JUMARAG_OPENAI_CHAT_MODEL: ${JUMARAG_OPENAI_CHAT_MODEL:-gpt-6-luna}
@@ -40,8 +42,14 @@ x-runtime: &runtime
     JUMARAG_PROVIDER_FAILURE_THRESHOLD: ${JUMARAG_PROVIDER_FAILURE_THRESHOLD:-3}
     JUMARAG_PROVIDER_CIRCUIT_OPEN_SECONDS: ${JUMARAG_PROVIDER_CIRCUIT_OPEN_SECONDS:-30}
     JUMARAG_ANSWER_MINIMUM_SIMILARITY: ${JUMARAG_ANSWER_MINIMUM_SIMILARITY:-0.05}
+    JUMARAG_ANSWER_RETRIEVAL_LIMIT: ${JUMARAG_ANSWER_RETRIEVAL_LIMIT:-8}
+    JUMARAG_ANSWER_MINIMUM_TOKEN_OVERLAP: ${JUMARAG_ANSWER_MINIMUM_TOKEN_OVERLAP:-1}
+    JUMARAG_MAX_QUESTION_CHARACTERS: ${JUMARAG_MAX_QUESTION_CHARACTERS:-4000}
     JUMARAG_MAX_CONTEXT_BYTES: ${JUMARAG_MAX_CONTEXT_BYTES:-8192}
     JUMARAG_MAX_CONTEXT_DEPTH: ${JUMARAG_MAX_CONTEXT_DEPTH:-8}
+    SPRINGDOC_API_DOCS_ENABLED: "false"
+    SPRINGDOC_SWAGGER_UI_ENABLED: "false"
+    LOG_LEVEL: ${LOG_LEVEL:-INFO}
   networks:
     - application
   restart: unless-stopped
@@ -73,6 +81,7 @@ services:
       JUMARAG_EMBEDDING_PROVIDER: fake
       JUMARAG_CHAT_PROVIDER: fake
       OPENAI_API_KEY: ""
+      JAVA_TOOL_OPTIONS: ${JUMARAG_MIGRATE_JAVA_TOOL_OPTIONS:?Set JUMARAG_MIGRATE_JAVA_TOOL_OPTIONS after reviewing VPS memory}
     depends_on:
       postgres:
         condition: service_healthy
@@ -84,11 +93,14 @@ services:
       <<: *runtime-environment
       APP_RUNTIME: api
       SERVER_PORT: "8080"
+      JAVA_TOOL_OPTIONS: ${JUMARAG_API_JAVA_TOOL_OPTIONS:?Set JUMARAG_API_JAVA_TOOL_OPTIONS after reviewing VPS memory}
     expose:
       - "8080"
     networks:
-      - application
-      - edge
+      application:
+      rag-client:
+        aliases:
+          - jumarag-api
     depends_on:
       migrate:
         condition: service_completed_successfully
@@ -105,8 +117,12 @@ services:
       <<: *runtime-environment
       APP_RUNTIME: worker
       SERVER_PORT: "8081"
+      JAVA_TOOL_OPTIONS: ${JUMARAG_WORKER_JAVA_TOOL_OPTIONS:?Set JUMARAG_WORKER_JAVA_TOOL_OPTIONS after reviewing VPS memory}
       SPRINGDOC_API_DOCS_ENABLED: "false"
       SPRINGDOC_SWAGGER_UI_ENABLED: "false"
+    networks:
+      - application
+      - provider-egress
     depends_on:
       migrate:
         condition: service_completed_successfully
@@ -119,9 +135,14 @@ services:
 
 volumes:
   postgres_data:
+    name: jumarag-postgres-data
 
 networks:
   application:
+    name: jumarag-internal
     internal: true
-  edge:
-    internal: true
+  rag-client:
+    external: true
+    name: ${JUMARAG_CLIENT_NETWORK:-rag-client}
+  provider-egress:
+    name: jumarag-provider-egress

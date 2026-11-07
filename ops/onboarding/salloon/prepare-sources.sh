@@ -2,7 +2,7 @@
 set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
-STAGING_DIR="$ROOT_DIR/.local/knowledge-sources"
+STAGING_DIR="${JUMARAG_SOURCE_ROOT:-$ROOT_DIR/.local/knowledge-sources}"
 MANIFEST_DIR="$ROOT_DIR/knowledge/onboarding/salloon"
 
 require_command() {
@@ -27,12 +27,23 @@ verify_artifact() {
   }
 }
 
+prepared_path() {
+  local manifest="$1" relative
+  relative="$(jq -r '.localPreparedFile' "$manifest")"
+  if [[ -n "${JUMARAG_SOURCE_ROOT:-}" ]]; then
+    printf '%s/%s\n' "$STAGING_DIR" "${relative#.local/knowledge-sources/}"
+  else
+    printf '%s/%s\n' "$ROOT_DIR" "$relative"
+  fi
+}
+
 prepare_pdf() {
   local manifest="$1"
   local directory="$2"
   local filename output pages temp page
   filename="$(jq -r '.artifactFileName' "$manifest")"
-  output="$ROOT_DIR/$(jq -r '.localPreparedFile' "$manifest")"
+  output="$(prepared_path "$manifest")"
+  mkdir -p "$(dirname "$output")"
   temp="${output}.tmp"
   pages="$(pdfinfo "$directory/$filename" | awk '/^Pages:/ {print $2}')"
   : > "$temp"
@@ -53,7 +64,8 @@ prepare_word() {
   local directory="$2"
   local filename output temp_dir converted
   filename="$(jq -r '.artifactFileName' "$manifest")"
-  output="$ROOT_DIR/$(jq -r '.localPreparedFile' "$manifest")"
+  output="$(prepared_path "$manifest")"
+  mkdir -p "$(dirname "$output")"
   temp_dir="$(mktemp -d)"
   trap 'rm -rf "$temp_dir"' RETURN
   libreoffice --headless --convert-to txt:Text --outdir "$temp_dir" "$directory/$filename" >/dev/null 2>&1

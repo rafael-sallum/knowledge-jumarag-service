@@ -302,6 +302,8 @@ Authoritative third-party documents are not committed. Reviewed manifests contai
 
 The onboarding package includes 30 evidence-oriented golden questions with explicit evidence intents, an idempotent bootstrap, a bounded strategy-comparison script, `salloon.match-context.v1`, the planned `Salloon Score Backend` client profile, and the future backend-to-backend contract. Comparative official-versus-implementation questions cannot be reported as grounded unless both sides are present and cited. See [the onboarding guide](knowledge/onboarding/salloon/README.md). Live Salloon API/frontend integration remains deferred.
 
+The private first-production topology, immutable GHCR release workflow, VPS bootstrap, backup/restore, and Salloon activation order are documented in [the production deployment runbook](docs/PRODUCTION_DEPLOYMENT.md).
+
 ## Current limitations
 
 OpenAI is the only real adapter. The service has no multi-provider routing, usage quotas, durable high-volume embedding jobs, provider-backed semantic conflict detection, or production provider health probe. The circuit breaker is process-local, appropriate for initial single-replica operation.

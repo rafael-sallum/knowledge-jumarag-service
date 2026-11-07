@@ -21,6 +21,8 @@ The script checks SHA-256 before extraction. It creates ingestion-ready Markdown
 
 If an upstream checksum changes, stop. Review the new official edition and add a new manifest/source version rather than replacing provenance silently.
 
+Production may keep the same verified layout outside the release by setting `JUMARAG_SOURCE_ROOT`, for example `/opt/jumarag/knowledge/sources`. Both preparation and bootstrap map the manifest's ignored `.local/knowledge-sources/...` paths under that controlled root. See [the production runbook](../../../docs/PRODUCTION_DEPLOYMENT.md) for exact artifact paths and the private bootstrap procedure.
+
 ## Idempotent bootstrap
 
 With an API configured for the desired explicit embedding profile:

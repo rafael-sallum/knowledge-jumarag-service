@@ -7,6 +7,7 @@ API_ROOT="${JUMARAG_API_ROOT:-http://127.0.0.1:8080}"
 
 ADMIN_HEADER="Authorization: Bearer ${JUMARAG_ADMIN_TOKEN}"
 MANIFEST_ROOT="$ROOT_DIR/knowledge/onboarding/salloon"
+SOURCE_ROOT="${JUMARAG_SOURCE_ROOT:-$ROOT_DIR/.local/knowledge-sources}"
 
 require_command() {
   command -v "$1" >/dev/null 2>&1 || { printf 'Required command not found: %s\n' "$1" >&2; exit 1; }
@@ -47,6 +48,16 @@ manifest_metadata() {
   jq -c '{governingBody,landingPage,canonicalUrl,edition,revision,publicationDate,retrievedAt,artifactSha256:.sha256,rights}' "$1"
 }
 
+prepared_file() {
+  local manifest="$1" relative
+  relative="$(jq -r '.localPreparedFile' "$manifest")"
+  if [[ -n "${JUMARAG_SOURCE_ROOT:-}" ]]; then
+    printf '%s/%s\n' "$SOURCE_ROOT" "${relative#.local/knowledge-sources/}"
+  else
+    printf '%s/%s\n' "$ROOT_DIR" "$relative"
+  fi
+}
+
 ensure_snapshot() {
   local kb_id="$1" name="$2" versions_json="$3" metadata="$4" existing existing_items wanted_items
   existing="$(admin_get "/v1/admin/knowledge-bases/$kb_id/snapshots" | jq -c --arg name "$name" '.[] | select(.name == $name)' | head -n 1)"
@@ -79,7 +90,7 @@ bootstrap_snooker() {
   kb_id="$(printf '%s' "$kb" | jq -r '.id')"
   official="$(ingest_file "$kb_id" "$(jq -r '.logicalName' "$manifest")" OFFICIAL_RULE en \
     "$(jq -r '.documentTitle + " " + .edition' "$manifest")" \
-    "$ROOT_DIR/$(jq -r '.localPreparedFile' "$manifest")" "$(manifest_metadata "$manifest")")"
+    "$(prepared_file "$manifest")" "$(manifest_metadata "$manifest")")"
   implementation="$(ingest_file "$kb_id" 'Salloon Score Snooker implementation notes' IMPLEMENTATION_NOTE en \
     'Salloon Score Snooker implementation notes' \
     "$MANIFEST_ROOT/snooker/implementation/salloon-snooker-implementation-notes.md" \
@@ -102,10 +113,10 @@ bootstrap_brazilian() {
   kb_id="$(printf '%s' "$kb" | jq -r '.id')"
   rules="$(ingest_file "$kb_id" "$(jq -r '.logicalName' "$rules_manifest")" OFFICIAL_RULE pt-BR \
     "$(jq -r '.documentTitle + " " + .edition' "$rules_manifest")" \
-    "$ROOT_DIR/$(jq -r '.localPreparedFile' "$rules_manifest")" "$(manifest_metadata "$rules_manifest")")"
+    "$(prepared_file "$rules_manifest")" "$(manifest_metadata "$rules_manifest")")"
   regulation="$(ingest_file "$kb_id" "$(jq -r '.logicalName' "$regulation_manifest")" OFFICIAL_RULE pt-BR \
     "$(jq -r '.documentTitle + " " + .edition' "$regulation_manifest")" \
-    "$ROOT_DIR/$(jq -r '.localPreparedFile' "$regulation_manifest")" "$(manifest_metadata "$regulation_manifest")")"
+    "$(prepared_file "$regulation_manifest")" "$(manifest_metadata "$regulation_manifest")")"
   implementation="$(ingest_file "$kb_id" 'Salloon Score Brazilian sinuca implementation notes' IMPLEMENTATION_NOTE pt-BR \
     'Notas de implementação da Sinuca brasileira no Salloon Score' \
     "$MANIFEST_ROOT/brazilian/implementation/salloon-brazilian-implementation-notes.md" \

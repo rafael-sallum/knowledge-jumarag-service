@@ -28,6 +28,15 @@ jobs:
           POSTGRES_DB=jumarag POSTGRES_USER=jumarag POSTGRES_PASSWORD=ci-only \
           JUMARAG_ADMIN_TOKEN=ci-admin-token-with-at-least-32-characters \
           JUMARAG_API_KEY_PEPPER=ci-api-key-pepper-with-at-least-32-characters \
+          JUMARAG_EMBEDDING_PROVIDER=openai JUMARAG_CHAT_PROVIDER=openai \
+          JUMARAG_DEFAULT_EMBEDDING_PROFILE=openai-text-embedding-3-small-1536 \
+          JUMARAG_RETRIEVAL_EMBEDDING_PROFILE=openai-text-embedding-3-small-1536 \
+          OPENAI_API_KEY=ci-placeholder-never-used \
+          JUMARAG_API_JAVA_TOOL_OPTIONS='-Xms128m -Xmx256m' \
+          JUMARAG_WORKER_JAVA_TOOL_OPTIONS='-Xms128m -Xmx256m' \
+          JUMARAG_MIGRATE_JAVA_TOOL_OPTIONS='-Xms64m -Xmx256m' \
           docker compose -f compose.production.yml config --quiet
+      - name: Validate production operations scripts
+        run: bash -n ops/production/*.sh ops/onboarding/salloon/*.sh
       - name: Build production image
         run: docker build --tag "knowledge-jumarag-service:${GITHUB_SHA}" .
